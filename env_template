@@ -1,0 +1,6 @@
+# McLeod TMS API Configuration
+# Copy this file to .env and update with your actual values
+
+TMS_BASE_URL=https://your-tms-domain.com
+TMS_COMPANY_ID=TMS
+TMS_LICENSING_AGENT=Digital Freight Matching
