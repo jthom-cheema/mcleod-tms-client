@@ -202,6 +202,40 @@ def example_working_with_images():
         
         # Generic approach (still works)
         trailer_images = client.get_json(f"/images/{RowTypes.TRAILER}/TRL456")
+        
+        # Get enriched images with clean document type names
+        enriched_images = client.get_enriched_images(RowTypes.ORDER, "5000003")
+        for image in enriched_images:
+            print(f"📄 {image['documentTypeName']} - {image['imageCount']} files")
+            print(f"   ID: {image['id']}")
+            print(f"   Full Description: {image['documentTypeFullDescription']}"))
+
+
+def example_working_with_doctypes():
+    """Discovering and working with document types dynamically."""
+    with TMSClient("username", "password") as client:
+        # Get available document types for specific order (cached automatically)
+        order_doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345")
+        print(f"Available ORDER doctypes: {len(order_doctypes)} types")
+        
+        # Get doctypes for different company
+        tms2_doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345", company_id="TMS2")
+        
+        # Get doctypes with movement association
+        movement_doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345", movement_id="MOV789")
+        
+        # Force fresh fetch (bypass cache)
+        fresh_doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345", use_cache=False)
+        
+        # Get doctypes for other record types
+        location_doctypes = client.get_available_doctypes(RowTypes.LOCATION, "67890")
+        driver_doctypes = client.get_available_doctypes(RowTypes.DRIVER, "DRV123")
+        
+        # Use doctypes in your business logic
+        for doctype in order_doctypes:
+            if doctype.get('name') == 'BOL':  # Bill of Lading
+                print(f"Found BOL doctype: {doctype['id']}")
+                # Use this doctype ID for document operations
 
 
 if __name__ == "__main__":
@@ -219,3 +253,4 @@ if __name__ == "__main__":
     print("- example_batch_operations()")
     print("- example_shipment_workflow()")
     print("- example_working_with_images()")
+    print("- example_working_with_doctypes()")

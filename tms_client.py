@@ -77,6 +77,9 @@ class TMSClient:
         # Initialize session
         self.session = requests.Session()
         
+        # Cache for doctypes to avoid repeated API calls
+        self._doctype_cache: Dict[str, Dict[str, Any]] = {}
+        
         # Set default headers including basic auth
         self.session.headers.update({
             'User-Agent': 'TMS-Python-Client/1.0',
@@ -113,6 +116,13 @@ class TMSClient:
             response = self.session.request(method, url, **kwargs)
             response.raise_for_status()
             return response
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 401:
+                raise Exception(f"Authentication failed (401): Invalid username or password")
+            elif response.status_code == 403:
+                raise Exception(f"Access denied (403): Insufficient permissions for this resource")
+            else:
+                raise Exception(f"HTTP {response.status_code}: {e}")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API request failed: {e}")
     
@@ -183,6 +193,226 @@ class TMSClient:
             >>> client.get_available_images(RowTypes.LOCATION, "67890", company_id="TMS2")
         """
         return self.get_json(f"/images/{row_type}/{row_id}", company_id=company_id)
+    
+    def get_enriched_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get available images with enriched document type information.
+        
+        This method combines image data with document type details to provide
+        human-readable descriptions and full document type metadata.
+        
+        Args:
+            row_type: Type of record (use RowTypes constants)
+            row_id: ID of the record
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            List of images with enriched document type information
+            
+        Examples:
+            >>> enriched_images = client.get_enriched_images(RowTypes.ORDER, "5000003")
+            >>> for image in enriched_images:
+            ...     print(f"{image['description']} ({image['imageCount']} files)")
+        """
+        # Get the basic images
+        images = self.get_available_images(row_type, row_id, company_id)
+        
+        if not images:
+            return images
+            
+        # Get document types for enrichment
+        try:
+            doc_types = self.get_available_doctypes(row_type, row_id, company_id=company_id)
+            
+            # Create lookup map: documentTypeId -> doc_type_info
+            doc_type_map = {}
+            if isinstance(doc_types, list):
+                for doc_type in doc_types:
+                    if 'id' in doc_type:
+                        doc_type_map[str(doc_type['id'])] = doc_type
+                        
+            # Enrich images with document type info
+            enriched_images = []
+            for image in images:
+                enriched_image = image.copy()
+                
+                doc_type_id = str(image.get('documentTypeId', ''))
+                if doc_type_id in doc_type_map:
+                    doc_type_info = doc_type_map[doc_type_id]
+                    # Get clean document type name by removing first 3 characters (e.g., "01-")
+                    full_description = doc_type_info.get('description', image.get('descr', 'Unknown'))
+                    clean_name = full_description[3:] if len(full_description) > 3 else full_description
+                    
+                    enriched_image['documentTypeName'] = clean_name
+                    enriched_image['documentTypeId'] = doc_type_info.get('id', doc_type_id)
+                    enriched_image['documentTypeFullDescription'] = full_description
+                else:
+                    # Fallback to existing description with same cleaning
+                    fallback_desc = image.get('descr', 'Unknown Document Type')
+                    clean_name = fallback_desc[3:] if len(fallback_desc) > 3 else fallback_desc
+                    enriched_image['documentTypeName'] = clean_name
+                    enriched_image['documentTypeId'] = doc_type_id
+                    enriched_image['documentTypeFullDescription'] = fallback_desc
+                    
+                enriched_images.append(enriched_image)
+                
+            return enriched_images
+            
+        except Exception:
+            # If document type enrichment fails, return basic images
+            return images
+    
+    def get_image_pdf(self, image_id: str, company_id: Optional[str] = None) -> bytes:
+        """
+        Retrieve the image as PDF binary data.
+        
+        Args:
+            image_id: The ID of the image (from image listings)
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            Raw PDF binary data
+            
+        Examples:
+            >>> pdf_data = client.get_image_pdf("dta.bol.7.0.5000003")
+            >>> with open("invoice.pdf", "wb") as f:
+            ...     f.write(pdf_data)
+        """
+        headers = {"Accept": "application/pdf"}
+        response = self.get(f"/images/{image_id}", company_id=company_id, headers=headers)
+        return response.content
+    
+    def save_image_pdf(self, image_id: str, filepath: str, company_id: Optional[str] = None) -> str:
+        """
+        Download and save an image as PDF file.
+        
+        Args:
+            image_id: The ID of the image
+            filepath: Where to save the file (.pdf extension will be added if missing)
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            The actual filepath where the file was saved
+            
+        Examples:
+            >>> client.save_image_pdf("dta.bol.7.0.5000003", "invoice")
+            'invoice.pdf'
+            
+            >>> client.save_image_pdf("dta.bol.7.0.5000003", "docs/invoice")
+            'docs/invoice.pdf'
+        """
+        # Get the PDF data
+        pdf_data = self.get_image_pdf(image_id, company_id)
+        
+        # Add .pdf extension if not present
+        if not filepath.endswith(".pdf"):
+            filepath = filepath + ".pdf"
+            
+        # Save the file
+        with open(filepath, "wb") as f:
+            f.write(pdf_data)
+            
+        return filepath
+    
+    def get_image_for_web(self, image_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get image data formatted for web response.
+        
+        Returns the PDF binary data along with proper HTTP headers for browser download.
+        Perfect for web backends serving to browsers.
+        
+        Args:
+            image_id: The ID of the image
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            Dictionary with 'data', 'headers', and 'filename' for web frameworks
+            
+        Examples:
+            # Flask
+            >>> result = client.get_image_for_web("dta.bol.7.0.5000003")
+            >>> return Response(result['data'], headers=result['headers'])
+            
+            # FastAPI  
+            >>> result = client.get_image_for_web("dta.bol.7.0.5000003")
+            >>> return Response(result['data'], media_type="application/pdf", 
+            ...                headers={"Content-Disposition": result['headers']['Content-Disposition']})
+            
+            # Django
+            >>> result = client.get_image_for_web("dta.bol.7.0.5000003")
+            >>> response = HttpResponse(result['data'], content_type='application/pdf')
+            >>> response['Content-Disposition'] = result['headers']['Content-Disposition']
+        """
+        # Get the PDF data
+        pdf_data = self.get_image_pdf(image_id, company_id)
+        
+        # Generate a clean filename from the image ID
+        # Extract meaningful parts from ID like "dta.bol.7.0.5000003"
+        parts = image_id.split('.')
+        if len(parts) >= 3:
+            # Try to create filename like "5000003_doc7.pdf"
+            record_id = parts[-1] if parts[-1] else "document"
+            doc_type = parts[-2] if len(parts) > 1 else "doc"
+            filename = f"{record_id}_doc{doc_type}.pdf"
+        else:
+            filename = f"{image_id.replace('.', '_')}.pdf"
+        
+        # Return web-ready response data
+        return {
+            'data': pdf_data,
+            'headers': {
+                'Content-Type': 'application/pdf',
+                'Content-Disposition': f'attachment; filename="{filename}"',
+                'Content-Length': str(len(pdf_data)),
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0'
+            },
+            'filename': filename,
+            'size': len(pdf_data)
+        }
+    
+    def get_available_doctypes(self, row_type: str, row_id: str, movement_id: Optional[str] = None, 
+                             company_id: Optional[str] = None, use_cache: bool = True) -> Dict[str, Any]:
+        """
+        Get available document types for a specific record type and ID.
+        
+        Args:
+            row_type: Type of record (use RowTypes constants)
+            row_id: ID of the specific record
+            movement_id: ID of the movement associated with the row (optional)
+            company_id: Override Company ID for this request (optional)
+            use_cache: Whether to use cached results (default: True)
+            
+        Returns:
+            List of DocumentType objects available for the specified record
+            
+        Examples:
+            >>> order_doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345")
+            >>> location_doctypes = client.get_available_doctypes(RowTypes.LOCATION, "67890", company_id="TMS2")
+            >>> movement_doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345", movement_id="MOV123")
+        """
+        # Create cache key including row_id since doctypes might vary by specific record
+        cache_key = f"{row_type}_{row_id}_{movement_id or 'none'}_{company_id or 'default'}"
+        
+        # Return cached result if available and cache is enabled
+        if use_cache and cache_key in self._doctype_cache:
+            return self._doctype_cache[cache_key]
+        
+        # Build query parameters
+        params = {}
+        if movement_id:
+            params['movementId'] = movement_id
+        
+        # Fetch from API using correct endpoint structure
+        doctypes = self.get_json(f"/images/{row_type}/{row_id}/documentTypes", 
+                               company_id=company_id, params=params)
+        
+        # Cache the result
+        if use_cache:
+            self._doctype_cache[cache_key] = doctypes
+            
+        return doctypes
     
     def close(self) -> None:
         """Close the session."""

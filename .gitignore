@@ -59,6 +59,10 @@ test_*.py
 tests/
 testing/
 
+# Sample data (may contain sensitive info)
+samples/
+downloads/
+
 # Keep type stubs
 !*.pyi
 
