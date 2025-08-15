@@ -59,6 +59,9 @@ test_*.py
 tests/
 testing/
 
+# Keep type stubs
+!*.pyi
+
 # OS
 .DS_Store
 .DS_Store?

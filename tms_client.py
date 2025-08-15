@@ -8,12 +8,47 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+# TMS Row Type Constants
+class RowTypes:
+    """Constants for TMS row types used in various API endpoints."""
+    ORDER = "O"           # Order
+    MOVEMENT = "M"        # Movement
+    CUSTOMER = "C"        # Customer
+    LOCATION = "L"        # Location
+    PAYEE = "P"          # Payee
+    DRIVER = "D"         # Driver
+    TRACTOR = "T"        # Tractor
+    TRAILER = "E"        # Trailer
+    USER = "U"           # User
+
+
 class TMSClient:
     """
     A client for interacting with the McLeod TMS API.
     
-    This client handles authentication using either HTTP Basic Auth or token-based auth,
-    and maintains a stateful session for making API calls.
+    This client uses HTTP Basic Authentication and maintains a stateful session for making API calls.
+    Avoids token accumulation by using basic auth for all requests.
+    
+    Examples:
+        Basic usage:
+        >>> with TMSClient("username", "password") as client:
+        ...     locations = client.get_json("/locations/new")
+        ...     orders = client.get_json("/orders", params={'status': 'active'})
+        
+        Company switching:
+        >>> client.get_json("/orders", company_id="TMS2")
+        
+        Raw response access:
+        >>> response = client.get("/locations/123")
+        >>> print(response.status_code)
+        >>> data = response.json()
+        
+        Custom headers and timeouts:
+        >>> client.get("/orders", timeout=30, headers={'Custom': 'value'})
+        
+        POST with JSON data:
+        >>> order_data = {"customer": "ACME", "status": "new"}
+        >>> result = client.post_json("/orders", data=order_data)
     """
     
     def __init__(self, username: str, password: str, base_url: Optional[str] = None):
@@ -35,72 +70,44 @@ class TMSClient:
         # Remove trailing slash if present
         self.base_url = self.base_url.rstrip('/')
         
+        # Create base64 encoded basic auth header
+        credentials = f"{username}:{password}"
+        self.basic_auth = base64.b64encode(credentials.encode()).decode()
+        
         # Initialize session
         self.session = requests.Session()
         
-        # Set default headers
+        # Set default headers including basic auth
         self.session.headers.update({
             'User-Agent': 'TMS-Python-Client/1.0',
             'Accept': 'application/json',
-            'X-com.mcleodsoftware.CompanyID': os.getenv('TMS_COMPANY_ID', 'TMS'),
-            'X-com.mcleodsoftware.LicensingAgent': os.getenv('TMS_LICENSING_AGENT', 'Digital Freight Matching')
+            'Authorization': f'Basic {self.basic_auth}',
+            'X-com.mcleodsoftware.CompanyID': os.getenv('TMS_COMPANY_ID', 'TMS')
         })
         
-        # Authentication token (will be set after login)
-        self.token: Optional[str] = None
-        
-        # Authenticate and get token
-        self._authenticate()
+        print(f"TMS Client initialized with Basic Auth for user: {username}")
     
-    def _authenticate(self) -> None:
-        """
-        Authenticate with the TMS API and obtain a token.
-        
-        This method first tries to get a token using the /users/login endpoint.
-        If successful, it sets up the session to use token-based authentication.
-        """
-        try:
-            # Create basic auth header for login
-            credentials = f"{self.username}:{self.password}"
-            encoded_credentials = base64.b64encode(credentials.encode()).decode()
-            basic_auth_header = f"Basic {encoded_credentials}"
-            
-            # Login to get token
-            login_url = f"{self.base_url}/users/login"
-            headers = {
-                'Authorization': basic_auth_header,
-                'Accept': 'text/plain'
-            }
-            
-            response = requests.post(login_url, headers=headers)
-            response.raise_for_status()
-            
-            # Extract token from response
-            self.token = response.text.strip()
-            
-            # Update session headers to use token authentication
-            self.session.headers.update({
-                'Authorization': f"Bearer {self.token}"
-            })
-            
-            print(f"Successfully authenticated and obtained token")
-            
-        except requests.exceptions.RequestException as e:
-            raise Exception(f"Authentication failed: {e}")
-    
-    def _make_request(self, method: str, endpoint: str, **kwargs) -> requests.Response:
+    def _make_request(self, method: str, endpoint: str, company_id: Optional[str] = None, **kwargs) -> requests.Response:
         """
         Make an authenticated request to the TMS API.
         
         Args:
             method: HTTP method (GET, POST, PUT, DELETE, etc.)
             endpoint: API endpoint (without base URL)
+            company_id: Override Company ID for this request (optional)
             **kwargs: Additional arguments to pass to requests
             
         Returns:
             Response object
         """
         url = f"{self.base_url}/{endpoint.lstrip('/')}"
+        
+        # Handle per-request company ID override
+        if company_id:
+            # Create headers with overridden company ID
+            headers = kwargs.get('headers', {})
+            headers['X-com.mcleodsoftware.CompanyID'] = company_id
+            kwargs['headers'] = headers
         
         try:
             response = self.session.request(method, url, **kwargs)
@@ -109,43 +116,45 @@ class TMSClient:
         except requests.exceptions.RequestException as e:
             raise Exception(f"API request failed: {e}")
     
-    def get(self, endpoint: str, **kwargs) -> requests.Response:
+    def get(self, endpoint: str, company_id: Optional[str] = None, **kwargs) -> requests.Response:
         """Make a GET request to the API."""
-        return self._make_request('GET', endpoint, **kwargs)
+        return self._make_request('GET', endpoint, company_id=company_id, **kwargs)
     
-    def post(self, endpoint: str, **kwargs) -> requests.Response:
+    def post(self, endpoint: str, company_id: Optional[str] = None, **kwargs) -> requests.Response:
         """Make a POST request to the API."""
-        return self._make_request('POST', endpoint, **kwargs)
+        return self._make_request('POST', endpoint, company_id=company_id, **kwargs)
     
-    def put(self, endpoint: str, **kwargs) -> requests.Response:
+    def put(self, endpoint: str, company_id: Optional[str] = None, **kwargs) -> requests.Response:
         """Make a PUT request to the API."""
-        return self._make_request('PUT', endpoint, **kwargs)
+        return self._make_request('PUT', endpoint, company_id=company_id, **kwargs)
     
-    def delete(self, endpoint: str, **kwargs) -> requests.Response:
+    def delete(self, endpoint: str, company_id: Optional[str] = None, **kwargs) -> requests.Response:
         """Make a DELETE request to the API."""
-        return self._make_request('DELETE', endpoint, **kwargs)
+        return self._make_request('DELETE', endpoint, company_id=company_id, **kwargs)
     
-    def get_json(self, endpoint: str, **kwargs) -> Dict[Any, Any]:
+    def get_json(self, endpoint: str, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a GET request and return JSON response.
         
         Args:
             endpoint: API endpoint
+            company_id: Override Company ID for this request (optional)
             **kwargs: Additional arguments to pass to requests
             
         Returns:
             Parsed JSON response
         """
-        response = self.get(endpoint, **kwargs)
+        response = self.get(endpoint, company_id=company_id, **kwargs)
         return response.json()
     
-    def post_json(self, endpoint: str, data: Optional[Dict] = None, **kwargs) -> Dict[Any, Any]:
+    def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.
         
         Args:
             endpoint: API endpoint
             data: Data to send as JSON
+            company_id: Override Company ID for this request (optional)
             **kwargs: Additional arguments to pass to requests
             
         Returns:
@@ -153,8 +162,27 @@ class TMSClient:
         """
         if data is not None:
             kwargs['json'] = data
-        response = self.post(endpoint, **kwargs)
+        response = self.post(endpoint, company_id=company_id, **kwargs)
         return response.json()
+    
+    # Convenience methods for common operations
+    def get_available_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Get available images for a specific record type and ID.
+        
+        Args:
+            row_type: Type of record (use RowTypes constants)
+            row_id: ID of the record
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            List of available images for the specified record
+            
+        Examples:
+            >>> client.get_available_images(RowTypes.ORDER, "12345")
+            >>> client.get_available_images(RowTypes.LOCATION, "67890", company_id="TMS2")
+        """
+        return self.get_json(f"/images/{row_type}/{row_id}", company_id=company_id)
     
     def close(self) -> None:
         """Close the session."""
@@ -181,7 +209,7 @@ if __name__ == "__main__":
             # Example API call - adjust endpoint based on actual API
             # response = client.get('/some/endpoint')
             print("TMS Client initialized successfully!")
-            print(f"Token obtained: {client.token[:20]}..." if client.token else "No token")
+            print(f"Using Basic Auth for user: {client.username}")
             
     except Exception as e:
         print(f"Error: {e}")
