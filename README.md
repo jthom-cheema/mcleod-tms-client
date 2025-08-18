@@ -93,3 +93,45 @@ If no `.env` file exists, you can also pass the base URL directly:
 ```python
 client = TMSClient("username", "password", base_url="https://your-domain.com")
 ```
+
+## Image Upload
+
+The client provides functionality to upload images to McLeod TMS object history:
+
+```python
+from tms_client import TMSClient, RowTypes
+
+with TMSClient("username", "password") as client:
+    # Upload from file path
+    batch_id = client.upload_image_to_history(
+        row_type=RowTypes.ORDER,
+        row_id="12345", 
+        document_type_id="7",  # Use get_available_doctypes() to find valid IDs
+        image_file="/path/to/invoice.pdf"
+    )
+    
+    # Upload from file object
+    with open("receipt.jpg", "rb") as f:
+        batch_id = client.upload_image_to_history(
+            row_type=RowTypes.ORDER,
+            row_id="12345",
+            document_type_id="5", 
+            image_file=f
+        )
+    
+    # Upload with movement ID
+    batch_id = client.upload_image_to_history(
+        row_type=RowTypes.ORDER,
+        row_id="12345",
+        document_type_id="1",
+        image_file="proof_of_delivery.pdf",
+        movement_id="456789"
+    )
+    
+    # Get available document types
+    doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345")
+    for doctype in doctypes:
+        print(f"ID: {doctype['id']} - {doctype['description']}")
+```
+
+**Important Note**: `upload_image_to_history()` uploads images to the object history/staging area. To move images from history to the main imaging area where they appear in loads, you need access to the "Import to Imaging" service in McLeod TMS. Contact McLeod support to enable this service.

@@ -208,7 +208,102 @@ def example_working_with_images():
         for image in enriched_images:
             print(f"📄 {image['documentTypeName']} - {image['imageCount']} files")
             print(f"   ID: {image['id']}")
-            print(f"   Full Description: {image['documentTypeFullDescription']}"))
+            print(f"   Full Description: {image['documentTypeFullDescription']}")
+
+
+def example_uploading_images():
+    """Uploading images to TMS object history."""
+    with TMSClient("username", "password") as client:
+        order_id = "12345"
+        
+        # First, get available document types for the order
+        doctypes = client.get_available_doctypes(RowTypes.ORDER, order_id)
+        print(f"Available document types: {len(doctypes)}")
+        for doctype in doctypes:
+            print(f"  ID: {doctype['id']} - {doctype['description']}")
+        
+        # Upload from file path
+        try:
+            batch_id = client.upload_image_to_history(
+                row_type=RowTypes.ORDER,
+                row_id=order_id,
+                document_type_id="7",  # Freight Bill/Invoice
+                image_file="/path/to/invoice.pdf"
+            )
+            print(f"Upload successful! Batch ID: {batch_id}")
+        except Exception as e:
+            print(f"Upload failed: {e}")
+        
+        # Upload from file object
+        try:
+            with open("receipt.jpg", "rb") as f:
+                batch_id = client.upload_image_to_history(
+                    row_type=RowTypes.ORDER,
+                    row_id=order_id,
+                    document_type_id="5",  # Fuel Receipt
+                    image_file=f
+                )
+                print(f"File object upload successful! Batch ID: {batch_id}")
+        except Exception as e:
+            print(f"File object upload failed: {e}")
+        
+        # Upload binary data directly
+        try:
+            with open("proof_of_delivery.pdf", "rb") as f:
+                pdf_data = f.read()
+            
+            batch_id = client.upload_image_to_history(
+                row_type=RowTypes.ORDER,
+                row_id=order_id,
+                document_type_id="1",  # Proof of Delivery-Signed
+                image_file=pdf_data
+            )
+            print(f"Binary data upload successful! Batch ID: {batch_id}")
+        except Exception as e:
+            print(f"Binary data upload failed: {e}")
+        
+        # Upload with movement ID (if order has movements)
+        try:
+            # First get order details to find movement ID
+            order = client.get_json(f"/orders/{order_id}")
+            movement_id = order.get("curr_movement_id")
+            
+            if movement_id:
+                batch_id = client.upload_image_to_history(
+                    row_type=RowTypes.ORDER,
+                    row_id=order_id,
+                    document_type_id="12",  # Other/Misc Receipts
+                    image_file="misc_document.pdf",
+                    movement_id=str(movement_id)
+                )
+                print(f"Upload with movement ID successful! Batch ID: {batch_id}")
+            else:
+                print("No current movement ID found for this order")
+        except Exception as e:
+            print(f"Movement-based upload failed: {e}")
+        
+        # Upload to different record types
+        examples = [
+            (RowTypes.LOCATION, "LOC123", "location_photo.jpg"),
+            (RowTypes.DRIVER, "DRV456", "license_scan.pdf"),
+            (RowTypes.TRACTOR, "TRC789", "inspection_report.pdf")
+        ]
+        
+        for row_type, row_id, filename in examples:
+            try:
+                # Get document types for this record type
+                doctypes = client.get_available_doctypes(row_type, row_id)
+                if doctypes:
+                    first_doctype = doctypes[0]['id']
+                    batch_id = client.upload_image_to_history(
+                        row_type=row_type,
+                        row_id=row_id,
+                        document_type_id=first_doctype,
+                        image_file=filename
+                    )
+                    print(f"{row_type} upload successful! Batch ID: {batch_id}")
+            except Exception as e:
+                print(f"{row_type} upload failed: {e}")
 
 
 def example_working_with_doctypes():
@@ -253,4 +348,5 @@ if __name__ == "__main__":
     print("- example_batch_operations()")
     print("- example_shipment_workflow()")
     print("- example_working_with_images()")
+    print("- example_uploading_images()")
     print("- example_working_with_doctypes()")

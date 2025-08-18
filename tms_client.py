@@ -1,7 +1,7 @@
 import os
 import base64
 import requests
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Union
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -121,6 +121,13 @@ class TMSClient:
                 raise Exception(f"Authentication failed (401): Invalid username or password")
             elif response.status_code == 403:
                 raise Exception(f"Access denied (403): Insufficient permissions for this resource")
+            elif response.status_code == 415:
+                # Include response body for 415 errors to debug content type issues
+                try:
+                    error_details = response.text
+                    raise Exception(f"HTTP 415 Unsupported Media Type: {error_details}")
+                except:
+                    raise Exception(f"HTTP 415 Unsupported Media Type: {e}")
             else:
                 raise Exception(f"HTTP {response.status_code}: {e}")
         except requests.exceptions.RequestException as e:
@@ -414,6 +421,88 @@ class TMSClient:
             
         return doctypes
     
+    def upload_image_to_history(self, row_type: str, row_id: str, document_type_id: str, 
+                               image_file: Union[str, bytes, Any], movement_id: Optional[str] = None, 
+                               company_id: Optional[str] = None) -> str:
+        """
+        Upload an image to the TMS object history (staging area).
+        
+        Note: This uploads images to the object history/staging area. To move images from 
+        history to the main imaging area, you need access to the "Import to Imaging" 
+        service in McLeod TMS.
+        
+        Args:
+            row_type: Type of record (use RowTypes constants: O, M, C, L, P, D, T, E, U)
+            row_id: ID of the record to associate the image with
+            document_type_id: ID of the document type
+            image_file: File-like object, file path string, or binary data to upload
+            movement_id: ID of the movement associated with the row (optional)
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            String containing batch ID for the staged upload
+            
+        Examples:
+            >>> # Upload from file path
+            >>> batch_id = client.upload_image_to_history(RowTypes.ORDER, "12345", "7", "/path/to/image.jpg")
+            
+            >>> # Upload from open file
+            >>> with open("invoice.pdf", "rb") as f:
+            ...     batch_id = client.upload_image_to_history(RowTypes.ORDER, "12345", "7", f)
+            
+            >>> # Upload with movement ID
+            >>> batch_id = client.upload_image_to_history(RowTypes.ORDER, "12345", "7", "image.png", 
+            ...                                          movement_id="MOV123")
+            
+            >>> # Upload binary data directly
+            >>> with open("doc.pdf", "rb") as f:
+            ...     data = f.read()
+            >>> batch_id = client.upload_image_to_history(RowTypes.ORDER, "12345", "7", data)
+        """
+        # Build endpoint URL
+        endpoint = f"/images/{row_type}/{row_id}/{document_type_id}"
+        
+        # Build query parameters
+        params = {}
+        if movement_id:
+            params['movementId'] = movement_id
+        
+        # Prepare binary data for upload (raw data, not multipart)
+        if isinstance(image_file, str):
+            # File path string - read the file
+            with open(image_file, 'rb') as f:
+                data = f.read()
+        elif hasattr(image_file, 'read'):
+            # File-like object - read the content
+            data = image_file.read()
+        else:
+            # Assume it's already binary data
+            data = image_file
+        
+        # API expects raw binary data in request body with proper Content-Type header
+        # Determine content type based on file content magic bytes
+        content_type = 'application/pdf'  # Default to PDF
+        if data.startswith(b'%PDF'):
+            content_type = 'application/pdf'
+        elif data.startswith(b'\xFF\xD8\xFF'):
+            content_type = 'image/jpeg'
+        elif data.startswith(b'\x89PNG'):
+            content_type = 'image/png'
+        elif data.startswith(b'GIF8'):
+            content_type = 'image/gif'
+        elif data.startswith(b'BM'):
+            content_type = 'image/bmp'
+        elif data[:4] in [b'II*\x00', b'MM\x00*']:
+            content_type = 'image/tiff'
+        
+        # Send raw binary data in request body with proper Content-Type header
+        headers = {'Content-Type': content_type}
+        response = self.post(endpoint, company_id=company_id, params=params, data=data, headers=headers)
+        
+        # Return the response as text (batch ID for staged upload)
+        return response.text
+    
+
     def close(self) -> None:
         """Close the session."""
         self.session.close()
