@@ -333,6 +333,172 @@ def example_working_with_doctypes():
                 # Use this doctype ID for document operations
 
 
+def example_charge_codes_and_billing():
+    """Working with charge codes and adding charges to orders."""
+    with TMSClient("username", "password") as client:
+        order_id = "12345"
+        
+        # Get all available charge codes (cached for 24 hours by default)
+        charge_codes = client.get_available_charge_codes()
+        print(f"Available charge codes: {len(charge_codes)}")
+        
+        # Display some common charge codes
+        common_codes = ['LUM', 'DTU', 'FSC', 'LAY', 'HAZ']
+        for code in charge_codes:
+            if code.get('id') in common_codes:
+                print(f"  {code['id']}: {code.get('description', 'No description')}")
+        
+        # Force fresh data from API
+        fresh_codes = client.get_available_charge_codes(use_cache=False)
+        
+        # Get charge codes for different company
+        tms2_codes = client.get_available_charge_codes(company_id="TMS2")
+        
+        # Refresh cache manually
+        success = client.refresh_charge_codes_cache()
+        print(f"Cache refresh successful: {success}")
+        
+        # Add various types of charges to an order
+        try:
+            # Basic lumper charge
+            success = client.add_charge(order_id, "LUM", "LUMPER", 75.00)
+            print(f"Added lumper charge: {success}")
+            
+            # Detention charge with units
+            success = client.add_charge(order_id, "DTU", "DETENTION", 50.00, units=2.0)
+            print(f"Added detention charge: {success}")
+            
+            # Fuel surcharge with percentage calculation
+            success = client.add_charge(order_id, "FSC", "FUEL SURCHARGE", 10.00, calc_method="P")
+            print(f"Added fuel surcharge: {success}")
+            
+            # Layover charge
+            success = client.add_charge(order_id, "LAY", "LAYOVER", 125.00)
+            print(f"Added layover charge: {success}")
+            
+        except Exception as e:
+            print(f"Failed to add charge: {e}")
+        
+        # Add charge with validation (will fail for invalid charge codes)
+        try:
+            # This will fail with helpful error message
+            client.add_charge(order_id, "INVALID", "Bad Code", 100.00)
+        except Exception as e:
+            print(f"Expected error for invalid code: {e}")
+        
+        # Add charges to different company
+        try:
+            success = client.add_charge(order_id, "LUM", "LUMPER", 80.00, company_id="TMS2")
+            print(f"Added charge to TMS2: {success}")
+        except Exception as e:
+            print(f"TMS2 charge failed: {e}")
+
+
+def example_order_management():
+    """Complete order management workflow with charges."""
+    with TMSClient("username", "password") as client:
+        order_id = "12345"
+        
+        # Get order details
+        order = client.get_json(f"/orders/{order_id}")
+        print(f"Order {order_id}: {order.get('customer_name', 'Unknown customer')}")
+        
+        # Show existing charges
+        existing_charges = order.get('otherCharges', [])
+        print(f"Existing charges: {len(existing_charges)}")
+        for charge in existing_charges:
+            charge_id = charge.get('charge_id', 'N/A')
+            description = charge.get('descr', 'No description')
+            amount = charge.get('amount', 0)
+            print(f"  {charge_id}: {description} - ${amount}")
+        
+        # Add new charges based on business logic
+        order_total = order.get('total_amount', 0)
+        
+        # Add fuel surcharge if order total is over $1000
+        if order_total > 1000:
+            try:
+                client.add_charge(order_id, "FSC", "FUEL SURCHARGE", order_total * 0.05, calc_method="P")
+                print("Added fuel surcharge (5%)")
+            except Exception as e:
+                print(f"Failed to add fuel surcharge: {e}")
+        
+        # Add detention if delivery is on weekend
+        from datetime import datetime
+        delivery_date = order.get('delivery_date')
+        if delivery_date:
+            delivery_dt = datetime.fromisoformat(delivery_date)
+            if delivery_dt.weekday() >= 5:  # Saturday or Sunday
+                try:
+                    client.add_charge(order_id, "DTU", "WEEKEND DETENTION", 100.00)
+                    print("Added weekend detention charge")
+                except Exception as e:
+                    print(f"Failed to add detention: {e}")
+        
+        # Get updated order to see new charges
+        updated_order = client.get_json(f"/orders/{order_id}")
+        new_charges = updated_order.get('otherCharges', [])
+        print(f"Updated charges: {len(new_charges)}")
+        
+        # Calculate total charge amount
+        total_charges = sum(charge.get('amount', 0) for charge in new_charges)
+        print(f"Total additional charges: ${total_charges}")
+
+
+def example_bulk_charge_operations():
+    """Bulk operations for charges across multiple orders."""
+    with TMSClient("username", "password") as client:
+        # Process multiple orders for fuel surcharge
+        order_ids = ["12345", "12346", "12347"]
+        fuel_surcharge_rate = 0.03  # 3%
+        
+        # Get charge codes once (cached)
+        charge_codes = client.get_available_charge_codes()
+        valid_codes = [code.get('id') for code in charge_codes]
+        
+        # Verify FSC code exists before processing orders
+        if "FSC" not in valid_codes:
+            print("Error: FSC charge code not available")
+            return
+        
+        successful_updates = 0
+        failed_updates = 0
+        
+        for order_id in order_ids:
+            try:
+                # Get order details for calculation
+                order = client.get_json(f"/orders/{order_id}")
+                order_total = order.get('total_amount', 0)
+                
+                if order_total > 0:
+                    surcharge_amount = order_total * fuel_surcharge_rate
+                    success = client.add_charge(
+                        order_id, 
+                        "FSC", 
+                        f"FUEL SURCHARGE ({fuel_surcharge_rate*100}%)",
+                        surcharge_amount,
+                        calc_method="P"
+                    )
+                    
+                    if success:
+                        successful_updates += 1
+                        print(f"✅ Order {order_id}: Added ${surcharge_amount:.2f} fuel surcharge")
+                    else:
+                        failed_updates += 1
+                        print(f"❌ Order {order_id}: Failed to add charge")
+                else:
+                    print(f"⚠️  Order {order_id}: No order total, skipping")
+                    
+            except Exception as e:
+                failed_updates += 1
+                print(f"❌ Order {order_id}: Error - {e}")
+        
+        print(f"\nBulk operation complete:")
+        print(f"  Successful: {successful_updates}")
+        print(f"  Failed: {failed_updates}")
+        print(f"  Total processed: {len(order_ids)}")
+
+
 if __name__ == "__main__":
     print("TMS Client Examples")
     print("==================")
@@ -350,3 +516,6 @@ if __name__ == "__main__":
     print("- example_working_with_images()")
     print("- example_uploading_images()")
     print("- example_working_with_doctypes()")
+    print("- example_charge_codes_and_billing()")
+    print("- example_order_management()")
+    print("- example_bulk_charge_operations()")

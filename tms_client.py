@@ -1,7 +1,10 @@
 import os
 import base64
 import requests
-from typing import Optional, Dict, Any, Union
+import json
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import Optional, Dict, Any, Union, List
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -79,6 +82,9 @@ class TMSClient:
         
         # Cache for doctypes to avoid repeated API calls
         self._doctype_cache: Dict[str, Dict[str, Any]] = {}
+        
+        # Cache for charge codes (in memory)
+        self._charge_codes_cache: Dict[str, Dict[str, Any]] = {}
         
         # Set default headers including basic auth
         self.session.headers.update({
@@ -421,6 +427,52 @@ class TMSClient:
             
         return doctypes
     
+    def get_available_charge_codes(self, use_cache: bool = True, cache_hours: int = 24, 
+                                  company_id: Optional[str] = None) -> List[Dict]:
+        """
+        Get available charge codes with simple caching.
+        
+        Args:
+            use_cache: Use cached data if available and valid (default: True) 
+            cache_hours: Hours before cache expires (default: 24)
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            List of charge code objects
+            
+        Examples:
+            >>> charge_codes = client.get_available_charge_codes()
+            >>> charge_codes = client.get_available_charge_codes(use_cache=False)  # force fresh
+        """
+        company = company_id or os.getenv('TMS_COMPANY_ID', 'TMS')
+        
+        # Check cache
+        if use_cache and company in self._charge_codes_cache:
+            cache_data = self._charge_codes_cache[company]
+            cache_time = datetime.fromisoformat(cache_data['timestamp'])
+            if datetime.now() < cache_time + timedelta(hours=cache_hours):
+                return cache_data['codes']
+        
+        # Fetch from API
+        charge_codes = self.get_json("/otherCharges/codes", company_id=company_id)
+        codes_list = charge_codes if isinstance(charge_codes, list) else []
+        
+        # Cache result
+        self._charge_codes_cache[company] = {
+            'codes': codes_list,
+            'timestamp': datetime.now().isoformat()
+        }
+        
+        return codes_list
+    
+    def refresh_charge_codes_cache(self, company_id: Optional[str] = None) -> bool:
+        """Force refresh charge codes from API."""
+        try:
+            self.get_available_charge_codes(use_cache=False, company_id=company_id)
+            return True
+        except Exception:
+            return False
+    
     def upload_image_to_history(self, row_type: str, row_id: str, document_type_id: str, 
                                image_file: Union[str, bytes, Any], movement_id: Optional[str] = None, 
                                company_id: Optional[str] = None) -> str:
@@ -502,6 +554,83 @@ class TMSClient:
         # Return the response as text (batch ID for staged upload)
         return response.text
     
+    def add_charge(self, order_id: str, charge_id: str, description: str, amount: float,
+                   units: float = 1.0, calc_method: str = "F", company_id: Optional[str] = None) -> bool:
+        """
+        Add a charge to an order using the working pattern from successful implementation.
+        
+        This follows the proven approach: load full current order, add minimal charge structure,
+        send complete order back to API.
+        
+        Args:
+            order_id: ID of the order to add charge to
+            charge_id: Charge code (e.g., 'LUM', 'DTU', 'MISC')
+            description: Charge description (e.g., 'LUMPER', 'DETENTION')
+            amount: Charge amount
+            units: Units/quantity (default: 1.0)
+            calc_method: Calculation method - 'F' for flat, 'P' for percent (default: 'F')
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            True if charge added successfully, False otherwise
+            
+        Examples:
+            >>> # Add a lumper charge
+            >>> client.add_charge("5000015", "LUM", "LUMPER", 75.00)
+            
+            >>> # Add detention charge
+            >>> client.add_charge("5000015", "DTU", "DETENTION", 50.00, units=2.0)
+            
+            >>> # Add misc charge with percent calculation
+            >>> client.add_charge("5000015", "MISC", "FUEL SURCHARGE", 25.00, calc_method="P")
+        """
+        try:
+            # Step 1: Validate charge code exists
+            available_codes = self.get_available_charge_codes(company_id=company_id)
+            valid_charge_ids = [code.get('id') for code in available_codes if code.get('id')]
+            
+            if charge_id not in valid_charge_ids:
+                raise Exception(f"Invalid charge code '{charge_id}'.")
+            
+            # Step 2: Get the complete current order (this is critical!)
+            current_order = self.get_json(f"/orders/{order_id}", company_id=company_id)
+            
+            # Step 3: Create minimal charge structure (only essential fields)
+            new_charge = {
+                "__type": "other_charge",
+                "__name": "otherCharges",
+                "charge_id": charge_id,
+                "descr": description,
+                "amount": float(amount),
+                "units": float(units),
+                "rate": float(amount),  # For flat charges, rate = amount
+                "calc_method": calc_method
+            }
+            
+            # Step 4: Add new charge to existing charges (no duplicate checking for now)
+            existing_charges = current_order.get("otherCharges", [])
+            all_charges = existing_charges + [new_charge]
+            
+            # Step 5: Update the complete order with new charges
+            current_order["otherCharges"] = all_charges
+            
+            # Step 6: Send the FULL order back to the API
+            headers = {
+                "Content-Type": "application/json", 
+                "Accept": "application/json"
+            }
+            
+            response = self.put("/orders/update", json=current_order, headers=headers, company_id=company_id)
+            
+            if response.status_code == 200:
+                return True
+            else:
+                # Let the calling code handle the error details
+                return False
+                
+        except Exception as e:
+            # Re-raise with context for debugging
+            raise Exception(f"Failed to add charge to order {order_id}: {e}")
 
     def close(self) -> None:
         """Close the session."""

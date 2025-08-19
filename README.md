@@ -135,3 +135,38 @@ with TMSClient("username", "password") as client:
 ```
 
 **Important Note**: `upload_image_to_history()` uploads images to the object history/staging area. To move images from history to the main imaging area where they appear in loads, you need access to the "Import to Imaging" service in McLeod TMS. Contact McLeod support to enable this service.
+
+## Charge Management
+
+The client provides functionality to manage charges on orders with automatic validation:
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Get available charge codes (cached for 24 hours)
+    charge_codes = client.get_available_charge_codes()
+    print(f"Available codes: {len(charge_codes)}")
+    
+    # Add charges to an order (validates charge codes automatically)
+    try:
+        # Basic lumper charge
+        success = client.add_charge("12345", "LUM", "LUMPER", 75.00)
+        
+        # Detention charge with units
+        success = client.add_charge("12345", "DTU", "DETENTION", 50.00, units=2.0)
+        
+        # Fuel surcharge with percentage calculation
+        success = client.add_charge("12345", "FSC", "FUEL SURCHARGE", 10.00, calc_method="P")
+        
+    except Exception as e:
+        print(f"Failed to add charge: {e}")
+    
+    # Force refresh charge codes cache
+    client.refresh_charge_codes_cache()
+    
+    # Get charge codes for different company
+    tms2_codes = client.get_available_charge_codes(company_id="TMS2")
+```
+
+**Charge Code Validation**: The `add_charge()` function automatically validates charge codes against the API. Invalid codes will raise an exception with a helpful error message.
