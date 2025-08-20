@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+
 # TMS Row Type Constants
 class RowTypes:
     """Constants for TMS row types used in various API endpoints."""
@@ -68,7 +69,12 @@ class TMSClient:
         self.base_url = base_url or os.getenv('TMS_BASE_URL')
         
         if not self.base_url:
-            raise ValueError("TMS_BASE_URL must be provided either as parameter or environment variable")
+            raise ValueError(
+                "TMS_BASE_URL must be provided. Options:\n"
+                "1. Pass as parameter: TMSClient(username, password, base_url='https://your-domain.com')\n"
+                "2. Set environment variable: TMS_BASE_URL=https://your-domain.com\n"
+                "3. Create .env file with: TMS_BASE_URL=https://your-domain.com"
+            )
             
         # Remove trailing slash if present
         self.base_url = self.base_url.rstrip('/')

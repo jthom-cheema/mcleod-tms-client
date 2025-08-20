@@ -13,19 +13,26 @@ pip install mcleod-tms-client
 ```python
 from mcleod_tms_client import TMSClient, RowTypes
 
-# Initialize client (credentials from environment or direct)
+# Option 1: Use environment variable (recommended)
 with TMSClient("username", "password") as client:
+    # Your API calls here
+    pass
+
+# Option 2: Pass URL directly
+with TMSClient("username", "password", base_url="https://your-domain.com") as client:
     # Your API calls here
     pass
 ```
 
 ## Environment Variables
 
-Create a `.env` file:
+Create a `.env` file in your project root:
 ```
 TMS_BASE_URL=https://your-tms-server.com/api
 TMS_COMPANY_ID=TMS
 ```
+
+**Note**: When installing this package in other projects, the `.env` file is not included for security reasons. You must configure the URL using one of the two methods above.
 
 ## Common Examples
 
