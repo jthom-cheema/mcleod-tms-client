@@ -121,7 +121,7 @@ def example_batch_operations():
         
         for order_id in order_ids:
             try:
-                order = client.get_json(f"/orders/{order_id}")
+                order = client.get_load_json(order_id)
                 orders.append(order)
             except Exception as e:
                 print(f"Failed to get order {order_id}: {e}")
@@ -265,7 +265,7 @@ def example_uploading_images():
         # Upload with movement ID (if order has movements)
         try:
             # First get order details to find movement ID
-            order = client.get_json(f"/orders/{order_id}")
+            order = client.get_load_json(order_id)
             movement_id = order.get("curr_movement_id")
             
             if movement_id:
@@ -436,7 +436,7 @@ def example_order_management():
                     print(f"Failed to add detention: {e}")
         
         # Get updated order to see new charges
-        updated_order = client.get_json(f"/orders/{order_id}")
+        updated_order = client.get_load_json(order_id)
         new_charges = updated_order.get('otherCharges', [])
         print(f"Updated charges: {len(new_charges)}")
         
@@ -467,7 +467,7 @@ def example_bulk_charge_operations():
         for order_id in order_ids:
             try:
                 # Get order details for calculation
-                order = client.get_json(f"/orders/{order_id}")
+                order = client.get_load_json(order_id)
                 order_total = order.get('total_amount', 0)
                 
                 if order_total > 0:

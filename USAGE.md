@@ -40,7 +40,7 @@ TMS_COMPANY_ID=TMS
 ```python
 # Get orders
 orders = client.get_json("/orders")
-specific_order = client.get_json("/orders/5000003")
+specific_order = client.get_load_json(5000003)
 
 # Get orders from different company
 orders_tms2 = client.get_json("/orders", company_id="TMS2")
@@ -123,7 +123,7 @@ RowTypes.USER       # "U" - User
 ```python
 try:
     with TMSClient("user", "pass") as client:
-        data = client.get_json("/orders/123")
+        data = client.get_load_json(123)
 except Exception as e:
     print(f"API Error: {e}")
 ```

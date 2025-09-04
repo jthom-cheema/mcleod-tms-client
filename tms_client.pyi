@@ -115,6 +115,13 @@ class TMSClient:
         """
         ...
     
+    def get_load_json(
+        self,
+        order_id: Union[str, int],
+        company_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Retrieve the full JSON for an order (load)."""
+    
     def post_json(
         self, 
         endpoint: str, 

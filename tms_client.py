@@ -176,6 +176,20 @@ class TMSClient:
         response = self.get(endpoint, company_id=company_id, **kwargs)
         return response.json()
     
+    def get_load_json(self, order_id: Union[str, int], company_id: Optional[str] = None) -> Dict[Any, Any]:
+        """
+        Retrieve the full JSON for a load (order).
+        
+        Args:
+            order_id: The order/load ID to retrieve
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID`
+        
+        Returns:
+            Parsed JSON for the specified order
+        """
+        order_id_str = str(order_id)
+        return self.get_json(f"/orders/{order_id_str}", company_id=company_id)
+
     def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.
@@ -599,7 +613,7 @@ class TMSClient:
                 raise Exception(f"Invalid charge code '{charge_id}'.")
             
             # Step 2: Get the complete current order (this is critical!)
-            current_order = self.get_json(f"/orders/{order_id}", company_id=company_id)
+            current_order = self.get_load_json(order_id, company_id=company_id)
             
             # Step 3: Create minimal charge structure (only essential fields)
             new_charge = {
