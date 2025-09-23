@@ -208,6 +208,79 @@ class TMSClient:
         response = self.post(endpoint, company_id=company_id, **kwargs)
         return response.json()
     
+    # Search helpers
+    def search_orders_by_bol(
+        self,
+        bol_numbers: Union[str, List[str]],
+        company_id: Optional[str] = None,
+        include_full: bool = False,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search orders (loads) by Bill of Lading number(s) using ``/orders/search``.
+
+        This queries the header field ``orders.blnum``. If multiple BOL numbers are
+        provided, the API is queried once per number and results are de-duplicated
+        by order ``id``.
+
+        Args:
+            bol_numbers: Single BOL string or list of BOL strings
+            company_id: Optional override for Company ID header
+            include_full: When True, fetch full order JSON for each hit
+            record_length: Optional page size for each individual query
+            record_offset: Optional offset for each individual query
+
+        Returns:
+            List of order dictionaries (full orders when ``include_full`` is True,
+            otherwise the RowOrders objects returned by the search endpoint).
+        """
+        # Normalize input
+        if isinstance(bol_numbers, str):
+            bol_list = [bol_numbers.strip()]
+        else:
+            bol_list = [str(b).strip() for b in bol_numbers if str(b).strip()]
+
+        if not bol_list:
+            return []
+
+        # Accumulate results, dedupe by order id
+        orders_by_id: Dict[str, Dict[str, Any]] = {}
+
+        for bol in bol_list:
+            params: Dict[str, Any] = {"orders.blnum": bol}
+            if record_length is not None:
+                params["recordLength"] = int(record_length)
+            if record_offset is not None:
+                params["recordOffset"] = int(record_offset)
+
+            try:
+                results = self.get_json("/orders/search", company_id=company_id, params=params)
+            except Exception as e:
+                # Continue to next BOL if one search fails
+                continue
+
+            if not isinstance(results, list):
+                continue
+
+            for row in results:
+                order_id = str(row.get("id")) if isinstance(row, dict) else None
+                if order_id and order_id not in orders_by_id:
+                    orders_by_id[order_id] = row
+
+        # Optionally expand to full order payloads
+        if include_full:
+            full_orders: List[Dict[str, Any]] = []
+            for order_id in list(orders_by_id.keys()):
+                try:
+                    full_orders.append(self.get_load_json(order_id, company_id=company_id))
+                except Exception:
+                    # Fallback to the summary row if full fetch fails
+                    full_orders.append(orders_by_id[order_id])
+            return full_orders
+
+        return list(orders_by_id.values())
+
     # Convenience methods for common operations
     def get_available_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
         """

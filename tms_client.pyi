@@ -142,6 +142,16 @@ class TMSClient:
             Parsed JSON response
         """
         ...
+
+    # Search helpers
+    def search_orders_by_bol(
+        self,
+        bol_numbers: Union[str, List[str]],
+        company_id: Optional[str] = None,
+        include_full: bool = False,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]: ...
     
     # Image and document methods
     def get_available_images(

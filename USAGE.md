@@ -44,6 +44,10 @@ specific_order = client.get_load_json(5000003)
 
 # Get orders from different company
 orders_tms2 = client.get_json("/orders", company_id="TMS2")
+
+# Search by BOL (header field orders.blnum)
+bol_hits = client.search_orders_by_bol("64724484")
+bol_full = client.search_orders_by_bol(["64724484", "8631328"], include_full=True)
 ```
 
 ### Images & Documents
