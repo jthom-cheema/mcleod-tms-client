@@ -152,6 +152,17 @@ class TMSClient:
         record_length: Optional[int] = None,
         record_offset: Optional[int] = None,
     ) -> List[Dict[str, Any]]: ...
+
+    def search_movements(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        changed_after_date: Optional[Union[str, Any]] = None,
+        changed_after_type: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]: ...
     
     # Image and document methods
     def get_available_images(

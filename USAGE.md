@@ -50,6 +50,39 @@ bol_hits = client.search_orders_by_bol("64724484")
 bol_full = client.search_orders_by_bol(["64724484", "8631328"], include_full=True)
 ```
 
+### Movements
+```python
+from datetime import datetime
+
+# Search movements with flexible filters
+movements = client.search_movements({
+    "destination.state": "AL",
+    "movement.status": "P"
+})
+
+# Search with change tracking (datetime or string)
+recent = client.search_movements(
+    {"destination.stop_type": "SO"},
+    changed_after_date="20251012000000-0700",
+    changed_after_type="Add"
+)
+
+# With datetime object (naive defaults to -0700)
+movements = client.search_movements(
+    {"origin.location_id": "WARE*"},
+    changed_after_date=datetime(2025, 10, 12),
+    changed_after_type="Update"
+)
+
+# With pagination and sorting
+page = client.search_movements(
+    {"driver.user": "DPR"},
+    order_by="movement.id DESC",
+    record_length=100,
+    record_offset=0
+)
+```
+
 ### Images & Documents
 ```python
 # Get available images for an order

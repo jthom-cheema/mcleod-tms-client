@@ -499,6 +499,142 @@ def example_bulk_charge_operations():
         print(f"  Total processed: {len(order_ids)}")
 
 
+def example_search_movements():
+    """Search movements with flexible filters and change tracking."""
+    from datetime import datetime, timedelta
+    
+    with TMSClient("username", "password") as client:
+        # Basic movement search with multiple filters
+        print("=== Basic Movement Search ===")
+        movements = client.search_movements({
+            "destination.state": "AL",
+            "movement.status": "P"
+        })
+        print(f"Found {len(movements)} in-progress movements to Alabama")
+        
+        # Search by origin location with wildcards
+        print("\n=== Origin Location Search ===")
+        warehouse_movements = client.search_movements({
+            "origin.location_id": "WARE*",
+            "destination.stop_type": "SO"
+        })
+        print(f"Found {len(warehouse_movements)} movements from WARE* locations")
+        
+        # Search with change tracking using string date
+        print("\n=== Change Tracking (String) ===")
+        recent = client.search_movements(
+            {"movement.status": "P"},
+            changed_after_date="20251012000000-0700",
+            changed_after_type="Add"
+        )
+        print(f"Found {len(recent)} movements added since 2025-10-12")
+        
+        # Search with datetime object (naive defaults to -0700)
+        print("\n=== Change Tracking (Datetime) ===")
+        yesterday = datetime.now() - timedelta(days=1)
+        updated = client.search_movements(
+            {"destination.driver_load_unload": "DRP"},
+            changed_after_date=yesterday,
+            changed_after_type="Update"
+        )
+        print(f"Found {len(updated)} movements updated since yesterday")
+        
+        # Search with pagination and sorting
+        print("\n=== Pagination and Sorting ===")
+        page1 = client.search_movements(
+            {"movement.status": "P"},
+            order_by="movement.id DESC",
+            record_length=50,
+            record_offset=0
+        )
+        print(f"Page 1: {len(page1)} movements")
+        
+        page2 = client.search_movements(
+            {"movement.status": "P"},
+            order_by="movement.id DESC",
+            record_length=50,
+            record_offset=50
+        )
+        print(f"Page 2: {len(page2)} movements")
+        
+        # Search by driver
+        print("\n=== Driver Search ===")
+        driver_movements = client.search_movements({
+            "driver.user": "DPR",
+            "movement.status": "P"
+        })
+        print(f"Found {len(driver_movements)} in-progress movements for driver DPR")
+        
+        # Search by tractor and trailer
+        print("\n=== Equipment Search ===")
+        equipment = client.search_movements({
+            "tractor.trctr": "TRC123",
+            "trailer.trlr": "TRL456"
+        })
+        print(f"Found {len(equipment)} movements with tractor TRC123 and trailer TRL456")
+        
+        # Complex multi-criteria search
+        print("\n=== Complex Search ===")
+        complex_search = client.search_movements(
+            {
+                "destination.state": "TX",
+                "destination.stop_type": "SO",
+                "destination.driver_load_unload": "DRP",
+                "movement.brokerage": "Y"
+            },
+            changed_after_date=datetime.now() - timedelta(days=7),
+            changed_after_type="Add",
+            order_by="movement.id DESC",
+            record_length=100
+        )
+        print(f"Found {len(complex_search)} brokered drop movements to Texas in last 7 days")
+        
+        # Display sample movement details
+        if complex_search:
+            print("\n=== Sample Movement ===")
+            sample = complex_search[0]
+            print(f"Movement ID: {sample.get('id')}")
+            print(f"Status: {sample.get('status')}")
+            print(f"Brokerage: {sample.get('brokerage')}")
+
+
+def example_movement_change_monitoring():
+    """Monitor movement changes for integration/sync workflows."""
+    from datetime import datetime, timedelta
+    
+    with TMSClient("username", "password") as client:
+        # Track newly added movements in last hour
+        one_hour_ago = datetime.now() - timedelta(hours=1)
+        new_movements = client.search_movements(
+            {},  # No filters - get all
+            changed_after_date=one_hour_ago,
+            changed_after_type="Add",
+            order_by="movement.id DESC"
+        )
+        
+        print(f"New movements in last hour: {len(new_movements)}")
+        for movement in new_movements:
+            print(f"  - Movement {movement.get('id')}: {movement.get('status')}")
+        
+        # Track updated movements for specific status
+        updated_in_progress = client.search_movements(
+            {"movement.status": "P"},
+            changed_after_date=one_hour_ago,
+            changed_after_type="Update"
+        )
+        
+        print(f"\nUpdated in-progress movements: {len(updated_in_progress)}")
+        
+        # Track all changes (both add and update) by omitting changedAfterType
+        all_changes = client.search_movements(
+            {"destination.state": "CA"},
+            changed_after_date=one_hour_ago
+            # No changed_after_type means both Add and Update
+        )
+        
+        print(f"\nAll CA movements changed in last hour: {len(all_changes)}")
+
+
 if __name__ == "__main__":
     print("TMS Client Examples")
     print("==================")
@@ -519,3 +655,5 @@ if __name__ == "__main__":
     print("- example_charge_codes_and_billing()")
     print("- example_order_management()")
     print("- example_bulk_charge_operations()")
+    print("- example_search_movements()")
+    print("- example_movement_change_monitoring()")

@@ -94,6 +94,42 @@ If no `.env` file exists, you can also pass the base URL directly:
 client = TMSClient("username", "password", base_url="https://your-domain.com")
 ```
 
+## Movement Search
+
+The client provides flexible movement search with change tracking:
+
+```python
+from tms_client import TMSClient
+from datetime import datetime
+
+with TMSClient("username", "password") as client:
+    # Basic search with table.field filters
+    movements = client.search_movements({
+        "destination.state": "AL",
+        "destination.stop_type": "SO",
+        "movement.status": "P"
+    })
+    
+    # Search with change tracking (string or datetime)
+    recent = client.search_movements(
+        {"destination.driver_load_unload": "DRP"},
+        changed_after_date="20251012000000-0700",
+        changed_after_type="Add"
+    )
+    
+    # Using datetime object (naive datetimes default to -0700)
+    updated = client.search_movements(
+        {"origin.location_id": "WARE*"},
+        changed_after_date=datetime(2025, 10, 12, 0, 0, 0),
+        changed_after_type="Update",
+        order_by="movement.id DESC",
+        record_length=100,
+        record_offset=0
+    )
+```
+
+**Supported Filter Prefixes**: `movement` (or no prefix), `origin`, `destination`, `driver`, `driver2`, `tractor`, `trailer`, `trailer2`, `trailer3`
+
 ## Image Upload
 
 The client provides functionality to upload images to McLeod TMS object history:

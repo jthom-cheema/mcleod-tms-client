@@ -281,6 +281,91 @@ class TMSClient:
 
         return list(orders_by_id.values())
 
+    def search_movements(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        changed_after_date: Optional[Union[str, datetime]] = None,
+        changed_after_type: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search movements using flexible table.field criteria with optional
+        change tracking window.
+
+        This calls the ``/movements/search`` endpoint and allows passing any
+        combination of prefixed fields supported by the API (e.g.,
+        ``movement.status``, ``origin.location_id``, ``destination.state``,
+        ``driver.user``/``driver2.user``, ``tractor.trctr``/``trctr2``,
+        ``trailer.trlr``/``trlr2``), along with optional
+        ``changedAfterDate`` and ``changedAfterType`` parameters.
+
+        Args:
+            filters: Mapping of query keys to values. Keys should include the
+                proper table/field prefix as required by the API
+                (for example: {"destination.state": "AL"}).
+            company_id: Optional override for Company ID header.
+            changed_after_date: Datetime or string for ``changedAfterDate``.
+                If a ``datetime`` is provided, it is formatted as
+                ``YYYYMMDDHHMMSS±ZZZZ``. Naive datetimes default to ``-0700``.
+            changed_after_type: One of ``"Add"`` or ``"Update"``.
+            order_by: Optional order by expression. Multiple columns may be
+                provided as a comma-delimited string per API docs.
+            record_length: Optional page size.
+            record_offset: Optional page offset.
+
+        Returns:
+            List of movement rows returned by the search.
+
+        Examples:
+            >>> client.search_movements(
+            ...     {"destination.state": "AL", "movement.status": "P"},
+            ...     changed_after_date="20250102000000+0000",
+            ...     changed_after_type="Add",
+            ...     record_length=100,
+            ...     record_offset=0,
+            ... )
+        """
+        # Start with a shallow copy to avoid mutating caller input
+        params: Dict[str, Any] = dict(filters or {})
+
+        # changedAfterDate formatting
+        if changed_after_date is not None:
+            if isinstance(changed_after_date, datetime):
+                dt = changed_after_date
+                # Default -0700 if naive
+                if dt.tzinfo is None:
+                    from datetime import timezone
+                    dt = dt.replace(tzinfo=timezone(timedelta(hours=-7)))
+                params["changedAfterDate"] = dt.strftime("%Y%m%d%H%M%S%z")
+            else:
+                # Allow caller to pass exact string expected by API
+                params["changedAfterDate"] = str(changed_after_date)
+
+        # changedAfterType validation/normalization
+        if changed_after_type is not None:
+            normalized = str(changed_after_type).strip().lower()
+            if normalized in ("add",):
+                params["changedAfterType"] = "Add"
+            elif normalized in ("update", "updated"):
+                params["changedAfterType"] = "Update"
+            else:
+                raise ValueError("changedAfterType must be 'Add' or 'Update'")
+
+        # Sorting and pagination
+        if order_by:
+            params["orderBy"] = order_by
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        results = self.get_json("/movements/search", company_id=company_id, params=params)
+        # Ensure list return type
+        return results if isinstance(results, list) else []
+
     # Convenience methods for common operations
     def get_available_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
         """
