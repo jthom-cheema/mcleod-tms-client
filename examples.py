@@ -67,6 +67,40 @@ def example_creating_records():
         new_customer = client.post_json("/customers", data=customer_data)
 
 
+def example_customer_search():
+    """Searching for customers by name or ID."""
+    with TMSClient("username", "password") as client:
+        # Search by company name
+        acme_customers = client.search_customers("ACME")
+        print(f"Found {len(acme_customers)} ACME customers")
+        
+        # Search by partial name
+        corp_customers = client.search_customers("Corp")
+        print(f"Found {len(corp_customers)} customers with 'Corp' in name")
+        
+        # Search by customer ID
+        specific_customer = client.search_customers("12345")
+        if specific_customer:
+            customer = specific_customer[0]
+            print(f"Customer: {customer.get('name')} - {customer.get('city')}, {customer.get('state')}")
+        
+        # Get all customers (empty query)
+        all_customers = client.search_customers("")
+        print(f"Total customers: {len(all_customers)}")
+        
+        # Search in different company
+        tms2_customers = client.search_customers("ACME", company_id="TMS2")
+        print(f"Found {len(tms2_customers)} ACME customers in TMS2")
+        
+        # Process customer data
+        for customer in acme_customers[:5]:  # Show first 5
+            print(f"  {customer.get('id')}: {customer.get('name')}")
+            print(f"    Address: {customer.get('address', 'N/A')}")
+            print(f"    City: {customer.get('city', 'N/A')}, {customer.get('state', 'N/A')}")
+            print(f"    Phone: {customer.get('phone', 'N/A')}")
+            print()
+
+
 def example_error_handling():
     """Proper error handling patterns."""
     with TMSClient("username", "password") as client:
@@ -657,3 +691,4 @@ if __name__ == "__main__":
     print("- example_bulk_charge_operations()")
     print("- example_search_movements()")
     print("- example_movement_change_monitoring()")
+    print("- example_customer_search()")

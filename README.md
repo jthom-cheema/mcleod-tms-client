@@ -42,6 +42,9 @@ with TMSClient("username", "password") as client:
     locations = client.get_json("/locations")
     orders = client.get_json("/orders", params={'status': 'active'})
     
+    # Search customers
+    customers = client.search_customers("ACME")
+    
     # Company switching (TMS vs TMS2)
     tms2_orders = client.get_json("/orders", company_id="TMS2")
     
@@ -206,3 +209,30 @@ with TMSClient("username", "password") as client:
 ```
 
 **Charge Code Validation**: The `add_charge()` function automatically validates charge codes against the API. Invalid codes will raise an exception with a helpful error message.
+
+## Customer Search
+
+The client provides customer search functionality:
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Search customers by name
+    customers = client.search_customers("ACME")
+    
+    # Search customers by ID
+    customers = client.search_customers("12345")
+    
+    # Get all customers (empty query)
+    all_customers = client.search_customers("")
+    
+    # Search in different company
+    tms2_customers = client.search_customers("ACME", company_id="TMS2")
+    
+    # Process results
+    for customer in customers:
+        print(f"Customer: {customer.get('name')} (ID: {customer.get('id')})")
+```
+
+**Customer Search**: Returns a list of RowCustomer objects matching the search query. Supports partial name matching and ID lookups.

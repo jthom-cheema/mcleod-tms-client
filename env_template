@@ -3,3 +3,5 @@
 
 TMS_BASE_URL=https://your-tms-domain.com
 TMS_COMPANY_ID=TMS
+TMS_USERNAME=your_username
+TMS_PASSWORD=your_password

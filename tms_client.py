@@ -190,6 +190,25 @@ class TMSClient:
         order_id_str = str(order_id)
         return self.get_json(f"/orders/{order_id_str}", company_id=company_id)
 
+    def search_customers(self, query: str, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for customers by name or ID.
+        
+        Args:
+            query: String to search for customers by name or ID
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID`
+        
+        Returns:
+            List of RowCustomer objects matching the search query
+            
+        Examples:
+            >>> customers = client.search_customers("ACME")
+            >>> customers = client.search_customers("12345")  # search by ID
+        """
+        params = {"q": query} if query else {}
+        results = self.get_json("/customers", company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
     def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.

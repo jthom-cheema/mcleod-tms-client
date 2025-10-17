@@ -50,6 +50,21 @@ bol_hits = client.search_orders_by_bol("64724484")
 bol_full = client.search_orders_by_bol(["64724484", "8631328"], include_full=True)
 ```
 
+### Customers
+```python
+# Search customers by name
+customers = client.search_customers("ACME")
+
+# Search customers by ID
+customers = client.search_customers("12345")
+
+# Get all customers
+all_customers = client.search_customers("")
+
+# Search in different company
+tms2_customers = client.search_customers("ACME", company_id="TMS2")
+```
+
 ### Movements
 ```python
 from datetime import datetime
