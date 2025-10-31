@@ -209,6 +209,108 @@ class TMSClient:
         results = self.get_json("/customers", company_id=company_id, params=params)
         return results if isinstance(results, list) else []
 
+    def search_users(self, query: str, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for users by ID, name, or email address using the McLeod API.
+        
+        This method queries the GET /users endpoint and returns a list of RowUser objects
+        that match the search criteria. The search parameter supports partial matching,
+        so you can search by full user ID, partial ID, name, or email address.
+        
+        Args:
+            query: String to search for users. Can be:
+                - Full user ID (e.g., "cfaa-jthom")
+                - Partial user ID (e.g., "cfaa" matches all users starting with "cfaa")
+                - Name (e.g., "Jack Thompson" or "Jack")
+                - Email address (e.g., "jthompson@teamcheema.com")
+                - Empty string ("") to get all users (may not be supported by all API versions)
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID` header.
+                Defaults to the company ID set during client initialization or TMS_COMPANY_ID env var.
+        
+        Returns:
+            List of RowUser dictionaries matching the search query. Each user object contains:
+            
+            **Common Fields:**
+            - ``id`` (str): Unique user ID (e.g., "cfaa-jthom")
+            - ``name`` (str): Full name of the user (e.g., "Jack Thompson")
+            - ``email_address`` (str): User's email address
+            - ``phone`` (str): User's phone number
+            - ``is_active`` (bool): Whether the user account is active
+            - ``company_id`` (str): Company the user belongs to (e.g., "TMS")
+            - ``active_date`` (str): Date when user was activated (format: YYYYMMDDHHMMSS±ZZZZ)
+            - ``login_id`` (str): Login identifier
+            - ``windows_login`` (str): Windows login name
+            
+            **Additional Fields (varies by user):**
+            - ``agent`` (bool): Whether user is an agent
+            - ``available`` (bool): Whether user is currently available
+            - ``department_id`` (str): Department identifier (e.g., "LOGS")
+            - ``extension`` (str): Phone extension
+            - ``date_format`` (str): User's preferred date format
+            - ``time_format`` (str): User's preferred time format
+            - ``enable_alerts`` (bool): Whether alerts are enabled
+            - ``confirm_record`` (bool): Whether record confirmation is required
+            - ``type_carrier`` (bool): Whether user can act as carrier
+            - ``type_owner_oper`` (bool): Whether user is owner operator
+            - ``type_company_drs`` (bool): Whether user handles company drivers
+            - And many more user-specific configuration fields
+            
+            Returns empty list if no users match the query.
+        
+        Raises:
+            Exception: If API request fails (authentication, network, etc.)
+        
+        Examples:
+            Search by exact user ID:
+            >>> users = client.search_users("cfaa-jthom")
+            >>> if users:
+            ...     user = users[0]
+            ...     print(f"Found: {user['name']} ({user['email_address']})")
+            Found: Jack Thompson (jthompson@teamcheema.com)
+            
+            Search by partial ID (returns multiple users):
+            >>> users = client.search_users("cfaa")
+            >>> print(f"Found {len(users)} users starting with 'cfaa'")
+            Found 100 users starting with 'cfaa'
+            
+            Search by name:
+            >>> users = client.search_users("Jack")
+            >>> for user in users:
+            ...     print(f"{user['id']}: {user['name']}")
+            
+            Search by email:
+            >>> users = client.search_users("jthompson@teamcheema.com")
+            >>> user = users[0]
+            >>> print(f"User ID: {user['id']}")
+            User ID: cfaa-jthom
+            
+            Search in specific company:
+            >>> users = client.search_users("cfaa-jthom", company_id="TMS2")
+            >>> # Returns user from TMS2 company database
+            
+            Check if user exists:
+            >>> users = client.search_users("cfaa-newuser")
+            >>> if not users:
+            ...     print("User not found")
+            
+            Get all available fields for a user:
+            >>> users = client.search_users("cfaa-jthom")
+            >>> if users:
+            ...     user = users[0]
+            ...     print("Available fields:", list(user.keys()))
+            ...     print("Department:", user.get('department_id'))
+            ...     print("Is Active:", user.get('is_active'))
+            ...     print("Phone:", user.get('phone'))
+        
+        Note:
+            The API may limit the number of results returned. For searches that return
+            many results (like searching for "cfaa"), the API may paginate or cap results.
+            Empty string queries may not be supported by all API versions.
+        """
+        params = {"q": query} if query else {}
+        results = self.get_json("/users", company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
     def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.

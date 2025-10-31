@@ -669,6 +669,70 @@ def example_movement_change_monitoring():
         print(f"\nAll CA movements changed in last hour: {len(all_changes)}")
 
 
+def example_user_search():
+    """Searching for users by ID, name, or email."""
+    with TMSClient("username", "password") as client:
+        # Search by exact user ID
+        users = client.search_users("cfaa-jthom")
+        if users:
+            user = users[0]
+            print(f"Found: {user['name']} ({user['email_address']})")
+            print(f"  ID: {user['id']}")
+            print(f"  Department: {user.get('department_id', 'N/A')}")
+            print(f"  Active: {user.get('is_active', False)}")
+            print(f"  Phone: {user.get('phone', 'N/A')}")
+        
+        # Search by partial ID (finds all users starting with prefix)
+        all_cfaa_users = client.search_users("cfaa")
+        print(f"\nFound {len(all_cfaa_users)} users starting with 'cfaa'")
+        for user in all_cfaa_users[:10]:  # Show first 10
+            print(f"  - {user['id']}: {user['name']}")
+        
+        # Search by name
+        jack_users = client.search_users("Jack")
+        print(f"\nFound {len(jack_users)} users with 'Jack' in name:")
+        for user in jack_users:
+            print(f"  - {user['id']}: {user['name']} ({user.get('email_address', 'No email')})")
+        
+        # Search by email
+        email_users = client.search_users("jthompson@teamcheema.com")
+        if email_users:
+            user = email_users[0]
+            print(f"\nUser found by email: {user['name']} (ID: {user['id']})")
+        
+        # Search in different company
+        tms2_users = client.search_users("cfaa-jthom", company_id="TMS2")
+        print(f"\nFound {len(tms2_users)} user(s) in TMS2")
+        
+        # Check if user exists
+        new_user = client.search_users("cfaa-newuser")
+        if not new_user:
+            print("\nUser 'cfaa-newuser' does not exist")
+        
+        # Get user details and display all fields
+        users = client.search_users("cfaa-jthom")
+        if users:
+            user = users[0]
+            print(f"\nAll fields for {user['name']}:")
+            for key, value in sorted(user.items()):
+                print(f"  {key}: {value}")
+        
+        # Find users by department
+        logs_users = []
+        for user in client.search_users("cfaa"):
+            if user.get('department_id') == 'LOGS':
+                logs_users.append(user)
+        print(f"\nFound {len(logs_users)} users in LOGS department")
+        for user in logs_users:
+            print(f"  - {user['name']} ({user['id']})")
+        
+        # Find active vs inactive users
+        active_users = [u for u in client.search_users("cfaa") if u.get('is_active')]
+        inactive_users = [u for u in client.search_users("cfaa") if not u.get('is_active')]
+        print(f"\nActive users: {len(active_users)}")
+        print(f"Inactive users: {len(inactive_users)}")
+
+
 if __name__ == "__main__":
     print("TMS Client Examples")
     print("==================")
@@ -692,3 +756,4 @@ if __name__ == "__main__":
     print("- example_search_movements()")
     print("- example_movement_change_monitoring()")
     print("- example_customer_search()")
+    print("- example_user_search()")
