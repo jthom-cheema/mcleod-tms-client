@@ -62,6 +62,7 @@ testing/
 # Sample data (may contain sensitive info)
 samples/
 downloads/
+rest_docs/
 
 # Keep type stubs
 !*.pyi
