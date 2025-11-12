@@ -311,6 +311,25 @@ class TMSClient:
         results = self.get_json("/users", company_id=company_id, params=params)
         return results if isinstance(results, list) else []
 
+    def search_locations(self, query: str, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for locations by code or name.
+        
+        Args:
+            query: String to search for locations by code or name
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID`
+        
+        Returns:
+            List of RowLocation objects matching the search query
+            
+        Examples:
+            >>> locations = client.search_locations("NYC01")
+            >>> locations = client.search_locations("New York")
+        """
+        params = {"q": query} if query else {}
+        results = self.get_json("/locations", company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
     def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.

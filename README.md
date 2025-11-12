@@ -210,9 +210,11 @@ with TMSClient("username", "password") as client:
 
 **Charge Code Validation**: The `add_charge()` function automatically validates charge codes against the API. Invalid codes will raise an exception with a helpful error message.
 
-## Customer Search
+## Search Functions
 
-The client provides customer search functionality:
+The client provides search functionality for customers, users, and locations:
+
+### Customer Search
 
 ```python
 from tms_client import TMSClient
@@ -235,4 +237,48 @@ with TMSClient("username", "password") as client:
         print(f"Customer: {customer.get('name')} (ID: {customer.get('id')})")
 ```
 
-**Customer Search**: Returns a list of RowCustomer objects matching the search query. Supports partial name matching and ID lookups.
+### User Search
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Search by user ID
+    users = client.search_users("cfaa-jthom")
+    
+    # Search by name
+    users = client.search_users("Jack Thompson")
+    
+    # Search by email
+    users = client.search_users("jthompson@teamcheema.com")
+    
+    # Search with partial ID
+    users = client.search_users("cfaa")  # Returns all users starting with "cfaa"
+    
+    # Process results
+    for user in users:
+        print(f"User: {user.get('name')} ({user.get('id')})")
+        print(f"Email: {user.get('email_address')}")
+```
+
+### Location Search
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Search by location code
+    locations = client.search_locations("NYC01")
+    
+    # Search by location name
+    locations = client.search_locations("New York")
+    
+    # Search in different company
+    locations = client.search_locations("LAX", company_id="TMS2")
+    
+    # Process results
+    for location in locations:
+        print(f"Location: {location.get('name')} (Code: {location.get('id')})")
+```
+
+**Search Notes**: All search functions return a list of matching objects. They support partial matching and empty queries may return all records (depending on API configuration).

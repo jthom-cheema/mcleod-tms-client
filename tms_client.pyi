@@ -144,6 +144,30 @@ class TMSClient:
         ...
 
     # Search helpers
+    def search_customers(
+        self,
+        query: str,
+        company_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search for customers by name or ID."""
+        ...
+
+    def search_users(
+        self,
+        query: str,
+        company_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search for users by ID, name, or email address."""
+        ...
+
+    def search_locations(
+        self,
+        query: str,
+        company_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search for locations by code or name."""
+        ...
+
     def search_orders_by_bol(
         self,
         bol_numbers: Union[str, List[str]],
