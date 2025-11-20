@@ -135,6 +135,31 @@ success = client.add_charge(
 )
 ```
 
+### Miscellaneous Billing History
+```python
+from datetime import datetime, timedelta
+
+# Search by date (past 7 days)
+seven_days_ago = datetime.now() - timedelta(days=7)
+bills = client.search_misc_billing_history(seven_days_ago)
+
+# Search with string date
+bills = client.search_misc_billing_history("20230401000000-0700")
+
+# Include user and customer details
+bills = client.search_misc_billing_history(
+    bill_date_after=seven_days_ago,
+    include_user=True,
+    include_customer=True
+)
+
+# Process results
+for bill in bills:
+    print(f"Invoice: {bill['invoice_no_string']}")
+    print(f"Customer: {bill['customer_id']}")
+    print(f"Total: ${bill['total_charges_n']}")
+```
+
 ### Web Framework Integration
 ```python
 # Flask example

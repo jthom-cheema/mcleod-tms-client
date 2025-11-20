@@ -281,4 +281,33 @@ with TMSClient("username", "password") as client:
         print(f"Location: {location.get('name')} (Code: {location.get('id')})")
 ```
 
+### Miscellaneous Billing History Search
+
+```python
+from tms_client import TMSClient
+from datetime import datetime, timedelta
+
+with TMSClient("username", "password") as client:
+    # Search using datetime (last 7 days)
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    bills = client.search_misc_billing_history(seven_days_ago)
+    
+    # Search using string date
+    bills = client.search_misc_billing_history("20230401000000-0700")
+    
+    # Include user and customer details
+    bills = client.search_misc_billing_history(
+        bill_date_after=seven_days_ago,
+        include_user=True,
+        include_customer=True
+    )
+    
+    # Process results
+    for bill in bills:
+        print(f"Invoice: {bill.get('invoice_no_string')}")
+        print(f"Bill Date: {bill.get('bill_date')}")
+        print(f"Customer: {bill.get('customer_id')}")
+        print(f"Total: ${bill.get('total_charges_n')}")
+```
+
 **Search Notes**: All search functions return a list of matching objects. They support partial matching and empty queries may return all records (depending on API configuration).

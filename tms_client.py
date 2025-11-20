@@ -506,6 +506,79 @@ class TMSClient:
         # Ensure list return type
         return results if isinstance(results, list) else []
 
+    def search_misc_billing_history(
+        self,
+        bill_date_after: Union[str, datetime],
+        company_id: Optional[str] = None,
+        include_user: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search miscellaneous billing history records by bill date.
+        
+        Retrieves a list of historical miscellaneous bills with bill_date 
+        occurring after the specified date.
+        
+        Args:
+            bill_date_after: Date to search after. Can be:
+                - datetime object (formatted as YYYYMMDDHHMMSS±ZZZZ, naive defaults to -0700)
+                - String in API format (YYYYMMDDHHMMSS±ZZZZ) or relative format (e.g., "t-100")
+            company_id: Optional override for Company ID header
+            include_user: Whether to include billing user details with each bill
+            include_customer: Whether to include customer details with each bill
+            
+        Returns:
+            List of RowMiscBillHist objects (misc_bill_hist records) matching the criteria
+            
+        Examples:
+            >>> # Search using datetime
+            >>> from datetime import datetime
+            >>> bills = client.search_misc_billing_history(
+            ...     datetime(2023, 4, 1, 0, 0, 0)
+            ... )
+            
+            >>> # Search using string date
+            >>> bills = client.search_misc_billing_history(
+            ...     "20230401000000-0700"
+            ... )
+            
+            >>> # Include user and customer details
+            >>> bills = client.search_misc_billing_history(
+            ...     "20230401000000-0700",
+            ...     include_user=True,
+            ...     include_customer=True
+            ... )
+        """
+        # Format the date parameter
+        if isinstance(bill_date_after, datetime):
+            dt = bill_date_after
+            # Default -0700 if naive
+            if dt.tzinfo is None:
+                from datetime import timezone
+                dt = dt.replace(tzinfo=timezone(timedelta(hours=-7)))
+            date_str = dt.strftime("%Y%m%d%H%M%S%z")
+        else:
+            # Allow caller to pass exact string expected by API
+            date_str = str(bill_date_after)
+        
+        # Build query parameters
+        # API expects: bill_date=>=YYYYMMDDHHMMSS±ZZZZ
+        params = {
+            "bill_date": f">={date_str}"
+        }
+        
+        # Add optional parameters
+        if include_user is not None:
+            params["includeUser"] = bool(include_user)
+        if include_customer is not None:
+            params["includeCustomer"] = bool(include_customer)
+        
+        # Make the API request
+        results = self.get_json("/billing/miscBilling/history", company_id=company_id, params=params)
+        
+        # Ensure list return type
+        return results if isinstance(results, list) else []
+
     # Convenience methods for common operations
     def get_available_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
         """
