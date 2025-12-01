@@ -3,5 +3,8 @@
 
 TMS_BASE_URL=https://your-tms-domain.com
 TMS_COMPANY_ID=TMS
+
+# Authentication: Use either username/password OR api_key (not both)
 TMS_USERNAME=your_username
 TMS_PASSWORD=your_password
+# TMS_API_KEY=your-api-key

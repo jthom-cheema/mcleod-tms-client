@@ -7,7 +7,15 @@ These examples show how to serve TMS images through your web backend.
 from tms_client import TMSClient, RowTypes
 
 # Initialize your TMS client (usually done once at app startup)
+# Option 1: Username/password authentication
 tms_client = TMSClient("username", "password")
+
+# Option 2: API key authentication
+# tms_client = TMSClient(api_key="your-api-key")
+
+# Option 3: Using environment variables
+# Set TMS_USERNAME/TMS_PASSWORD or TMS_API_KEY in .env file
+# tms_client = TMSClient()
 
 
 # === FLASK EXAMPLE ===

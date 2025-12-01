@@ -35,7 +35,7 @@ TMS_COMPANY_ID=YOUR_COMPANY_ID
 ```python
 from tms_client import TMSClient
 
-# Initialize client (loads from .env)
+# Initialize client with username/password (loads from .env if available)
 with TMSClient("username", "password") as client:
     
     # Get JSON data
@@ -64,6 +64,10 @@ with TMSClient("username", "password") as client:
     
     # Custom timeouts and headers
     client.get("/orders", timeout=30, headers={'Custom': 'value'})
+
+# Initialize client with API key
+with TMSClient(api_key="your-api-key") as client:
+    orders = client.get_json("/orders")
 ```
 
 ### Advanced Usage
@@ -91,10 +95,17 @@ except Exception as e:
 The client uses these environment variables:
 - `TMS_BASE_URL`: Base URL for the TMS API
 - `TMS_COMPANY_ID`: Company ID header value
+- `TMS_USERNAME`: Username for authentication (optional if using API key)
+- `TMS_PASSWORD`: Password for authentication (optional if using API key)
+- `TMS_API_KEY`: API key for authentication (optional if using username/password)
 
-If no `.env` file exists, you can also pass the base URL directly:
+If no `.env` file exists, you can also pass credentials directly:
 ```python
+# Username/password
 client = TMSClient("username", "password", base_url="https://your-domain.com")
+
+# API key
+client = TMSClient(api_key="your-api-key", base_url="https://your-domain.com")
 ```
 
 ## Movement Search

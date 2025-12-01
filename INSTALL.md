@@ -20,9 +20,18 @@
    ```python
    from tms_client import TMSClient, RowTypes
    
+   # Option 1: Username/password authentication
    with TMSClient("username", "password") as client:
        orders = client.get_json("/orders")
        images = client.get_available_images(RowTypes.ORDER, "12345")
+   
+   # Option 2: API key authentication
+   with TMSClient(api_key="your-api-key") as client:
+       orders = client.get_json("/orders")
+   
+   # Option 3: Using environment variables (set TMS_USERNAME/TMS_PASSWORD or TMS_API_KEY)
+   with TMSClient() as client:
+       orders = client.get_json("/orders")
    ```
 
 ## Benefits of Editable Install
@@ -68,6 +77,7 @@ pip install -e /path/to/mcleod-tms-client
 **Environment Issues:**
 - Make sure `.env` file exists in your consumer project
 - Check that `TMS_BASE_URL` is set correctly
+- Set either `TMS_USERNAME`/`TMS_PASSWORD` OR `TMS_API_KEY` (not both)
 - Verify credentials work with the test script
 
 ## Production Deployment

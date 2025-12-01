@@ -10,7 +10,22 @@ from tms_client import TMSClient, RowTypes
 
 def example_basic_usage():
     """Basic API calls with the TMS client."""
+    # Option 1: Username/password authentication
     with TMSClient("username", "password") as client:
+        # Get location template
+        location_template = client.get_json("/locations/new")
+        
+        # Get all locations
+        locations = client.get_json("/locations")
+        
+        # Get locations with filtering
+        active_locations = client.get_json("/locations", params={"active": True})
+        
+        # Get specific location
+        location = client.get_json("/locations/123")
+    
+    # Option 2: API key authentication
+    with TMSClient(api_key="your-api-key") as client:
         # Get location template
         location_template = client.get_json("/locations/new")
         
@@ -26,6 +41,7 @@ def example_basic_usage():
 
 def example_company_switching():
     """Working with different company databases (TMS vs TMS2)."""
+    # Can use either username/password or API key
     with TMSClient("username", "password") as client:
         # Default company (TMS)
         tms_orders = client.get_json("/orders")
@@ -44,6 +60,7 @@ def example_company_switching():
 
 def example_creating_records():
     """Creating new records via POST requests."""
+    # Works with both authentication methods
     with TMSClient("username", "password") as client:
         # Create a new location
         location_data = {
@@ -69,6 +86,7 @@ def example_creating_records():
 
 def example_customer_search():
     """Searching for customers by name or ID."""
+    # Username/password or API key both work
     with TMSClient("username", "password") as client:
         # Search by company name
         acme_customers = client.search_customers("ACME")
@@ -103,6 +121,7 @@ def example_customer_search():
 
 def example_error_handling():
     """Proper error handling patterns."""
+    # Works with any authentication method
     with TMSClient("username", "password") as client:
         try:
             # This might fail
@@ -124,6 +143,7 @@ def example_error_handling():
 
 def example_advanced_requests():
     """Advanced request patterns with custom parameters."""
+    # All authentication methods supported
     with TMSClient("username", "password") as client:
         # Request with timeout
         orders = client.get_json("/orders", timeout=30)
@@ -148,6 +168,7 @@ def example_advanced_requests():
 
 def example_batch_operations():
     """Working with multiple records efficiently."""
+    # Username/password or API key authentication
     with TMSClient("username", "password") as client:
         # Get multiple orders by ID
         order_ids = [123, 456, 789]
@@ -178,6 +199,7 @@ def example_batch_operations():
 
 def example_shipment_workflow():
     """Complete shipment creation workflow."""
+    # Supports both authentication methods
     with TMSClient("username", "password") as client:
         # 1. Create shipment
         shipment_data = {
@@ -225,6 +247,7 @@ def example_shipment_workflow():
 
 def example_working_with_images():
     """Working with images using row type constants."""
+    # Works with username/password or API key
     with TMSClient("username", "password") as client:
         # Get available images using the convenience method
         order_images = client.get_available_images(RowTypes.ORDER, "12345")
@@ -247,6 +270,7 @@ def example_working_with_images():
 
 def example_uploading_images():
     """Uploading images to TMS object history."""
+    # All authentication methods supported
     with TMSClient("username", "password") as client:
         order_id = "12345"
         
@@ -342,6 +366,7 @@ def example_uploading_images():
 
 def example_working_with_doctypes():
     """Discovering and working with document types dynamically."""
+    # Username/password or API key authentication
     with TMSClient("username", "password") as client:
         # Get available document types for specific order (cached automatically)
         order_doctypes = client.get_available_doctypes(RowTypes.ORDER, "12345")
@@ -369,6 +394,7 @@ def example_working_with_doctypes():
 
 def example_charge_codes_and_billing():
     """Working with charge codes and adding charges to orders."""
+    # Supports both authentication methods
     with TMSClient("username", "password") as client:
         order_id = "12345"
         
@@ -430,6 +456,7 @@ def example_charge_codes_and_billing():
 
 def example_order_management():
     """Complete order management workflow with charges."""
+    # Works with username/password or API key
     with TMSClient("username", "password") as client:
         order_id = "12345"
         
@@ -481,6 +508,7 @@ def example_order_management():
 
 def example_bulk_charge_operations():
     """Bulk operations for charges across multiple orders."""
+    # All authentication methods supported
     with TMSClient("username", "password") as client:
         # Process multiple orders for fuel surcharge
         order_ids = ["12345", "12346", "12347"]
@@ -537,6 +565,7 @@ def example_search_movements():
     """Search movements with flexible filters and change tracking."""
     from datetime import datetime, timedelta
     
+    # Username/password or API key authentication
     with TMSClient("username", "password") as client:
         # Basic movement search with multiple filters
         print("=== Basic Movement Search ===")
@@ -636,6 +665,7 @@ def example_movement_change_monitoring():
     """Monitor movement changes for integration/sync workflows."""
     from datetime import datetime, timedelta
     
+    # Works with both authentication methods
     with TMSClient("username", "password") as client:
         # Track newly added movements in last hour
         one_hour_ago = datetime.now() - timedelta(hours=1)
@@ -671,6 +701,7 @@ def example_movement_change_monitoring():
 
 def example_user_search():
     """Searching for users by ID, name, or email."""
+    # Supports username/password or API key
     with TMSClient("username", "password") as client:
         # Search by exact user ID
         users = client.search_users("cfaa-jthom")
@@ -733,11 +764,45 @@ def example_user_search():
         print(f"Inactive users: {len(inactive_users)}")
 
 
+def example_authentication_methods():
+    """Different ways to authenticate with the TMS client."""
+    # Method 1: Username and password (positional)
+    with TMSClient("username", "password") as client:
+        orders = client.get_json("/orders")
+    
+    # Method 2: Username and password (keyword)
+    with TMSClient(username="username", password="password") as client:
+        orders = client.get_json("/orders")
+    
+    # Method 3: API key (default Bearer token)
+    with TMSClient(api_key="your-api-key") as client:
+        orders = client.get_json("/orders")
+    
+    # Method 4: API key with custom header format
+    with TMSClient(api_key="your-api-key", api_key_header="ApiKey") as client:
+        orders = client.get_json("/orders")
+    
+    # Method 5: API key with X-API-Key header
+    with TMSClient(api_key="your-api-key", api_key_header="X-API-Key") as client:
+        orders = client.get_json("/orders")
+    
+    # Method 6: Using environment variables
+    # Set TMS_USERNAME, TMS_PASSWORD, or TMS_API_KEY in .env file
+    # Then just call:
+    # with TMSClient() as client:
+    #     orders = client.get_json("/orders")
+
+
 if __name__ == "__main__":
     print("TMS Client Examples")
     print("==================")
     print("This file contains example usage patterns.")
     print("Import the functions you need or run them directly.")
+    print()
+    print("Authentication Methods:")
+    print("- Username/password (positional or keyword)")
+    print("- API key (Bearer, ApiKey, or X-API-Key header)")
+    print("- Environment variables (TMS_USERNAME/TMS_PASSWORD or TMS_API_KEY)")
     print()
     print("Available examples:")
     print("- example_basic_usage()")
@@ -757,3 +822,4 @@ if __name__ == "__main__":
     print("- example_movement_change_monitoring()")
     print("- example_customer_search()")
     print("- example_user_search()")
+    print("- example_authentication_methods()")

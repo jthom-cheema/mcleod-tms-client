@@ -13,13 +13,23 @@ pip install mcleod-tms-client
 ```python
 from mcleod_tms_client import TMSClient, RowTypes
 
-# Option 1: Use environment variable (recommended)
+# Option 1: Username/password authentication (recommended)
 with TMSClient("username", "password") as client:
     # Your API calls here
     pass
 
-# Option 2: Pass URL directly
+# Option 2: API key authentication
+with TMSClient(api_key="your-api-key") as client:
+    # Your API calls here
+    pass
+
+# Option 3: Pass URL directly
 with TMSClient("username", "password", base_url="https://your-domain.com") as client:
+    # Your API calls here
+    pass
+
+# Option 4: API key with custom header format
+with TMSClient(api_key="your-api-key", api_key_header="ApiKey") as client:
     # Your API calls here
     pass
 ```
@@ -30,9 +40,19 @@ Create a `.env` file in your project root:
 ```
 TMS_BASE_URL=https://your-tms-server.com/api
 TMS_COMPANY_ID=TMS
+
+# Authentication: Use either username/password OR api_key (not both)
+TMS_USERNAME=your_username
+TMS_PASSWORD=your_password
+# TMS_API_KEY=your-api-key
 ```
 
-**Note**: When installing this package in other projects, the `.env` file is not included for security reasons. You must configure the URL using one of the two methods above.
+**Note**: When installing this package in other projects, the `.env` file is not included for security reasons. You must configure the URL and credentials using one of the methods above.
+
+**API Key Header Formats**: The `api_key_header` parameter supports:
+- `"Bearer"` (default): `Authorization: Bearer <api_key>`
+- `"ApiKey"`: `Authorization: ApiKey <api_key>`
+- `"X-API-Key"`: Custom header `X-API-Key: <api_key>`
 
 ## Common Examples
 

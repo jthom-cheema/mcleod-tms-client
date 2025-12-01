@@ -18,16 +18,20 @@ class RowTypes:
 
 class TMSClient:
     """
-    McLeod TMS API client with HTTP Basic Authentication.
+    McLeod TMS API client with HTTP Basic Authentication or API Key authentication.
     
-    This client uses HTTP Basic Authentication and maintains a stateful session for making API calls.
-    Avoids token accumulation by using basic auth for all requests.
+    This client supports both HTTP Basic Authentication (username/password) and API key authentication.
+    Maintains a stateful session for making API calls.
     
     Examples:
-        Basic usage:
+        Basic usage with username/password:
         >>> with TMSClient("username", "password") as client:
         ...     locations = client.get_json("/locations/new")
         ...     orders = client.get_json("/orders", params={'status': 'active'})
+        
+        API key authentication:
+        >>> with TMSClient(api_key="your-api-key") as client:
+        ...     orders = client.get_json("/orders")
         
         Company switching:
         >>> client.get_json("/orders", company_id="TMS2")
@@ -38,25 +42,34 @@ class TMSClient:
         >>> data = response.json()
     """
     
-    username: str
-    password: str
+    username: Optional[str]
+    password: Optional[str]
     base_url: str
-    basic_auth: str
+    basic_auth: Optional[str]
+    api_key: Optional[str]
+    api_key_header: Optional[str]
     session: requests.Session
     
     def __init__(
         self, 
-        username: str, 
-        password: str, 
-        base_url: Optional[str] = None
+        username: Optional[str] = None, 
+        password: Optional[str] = None, 
+        base_url: Optional[str] = None,
+        api_key: Optional[str] = None,
+        api_key_header: str = "Bearer"
     ) -> None:
         """
         Initialize the TMS client.
         
         Args:
-            username: Username for authentication
-            password: Password for authentication  
+            username: Username for authentication (required if api_key not provided)
+            password: Password for authentication (required if api_key not provided)
             base_url: Base URL for the TMS API (defaults to env var TMS_BASE_URL)
+            api_key: API key for authentication (alternative to username/password)
+            api_key_header: Header format for API key. Options:
+                - "Bearer" (default): Authorization: Bearer <api_key>
+                - "ApiKey": Authorization: ApiKey <api_key>
+                - "X-API-Key": Custom header X-API-Key: <api_key>
         """
         ...
     

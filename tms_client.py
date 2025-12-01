@@ -30,14 +30,22 @@ class TMSClient:
     """
     A client for interacting with the McLeod TMS API.
     
-    This client uses HTTP Basic Authentication and maintains a stateful session for making API calls.
-    Avoids token accumulation by using basic auth for all requests.
+    This client supports both HTTP Basic Authentication (username/password) and API key authentication.
+    Maintains a stateful session for making API calls.
     
     Examples:
-        Basic usage:
+        Basic usage with username/password:
         >>> with TMSClient("username", "password") as client:
         ...     locations = client.get_json("/locations/new")
         ...     orders = client.get_json("/orders", params={'status': 'active'})
+        
+        API key authentication:
+        >>> with TMSClient(api_key="your-api-key") as client:
+        ...     orders = client.get_json("/orders")
+        
+        API key with custom header format:
+        >>> with TMSClient(api_key="your-api-key", api_key_header="ApiKey") as client:
+        ...     orders = client.get_json("/orders")
         
         Company switching:
         >>> client.get_json("/orders", company_id="TMS2")
@@ -55,33 +63,79 @@ class TMSClient:
         >>> result = client.post_json("/orders", data=order_data)
     """
     
-    def __init__(self, username: str, password: str, base_url: Optional[str] = None):
+    def __init__(self, username: Optional[str] = None, password: Optional[str] = None, 
+                 base_url: Optional[str] = None, api_key: Optional[str] = None,
+                 api_key_header: str = "Bearer"):
         """
         Initialize the TMS client.
         
         Args:
-            username: Username for authentication
-            password: Password for authentication  
+            username: Username for authentication (required if api_key not provided)
+            password: Password for authentication (required if api_key not provided)
             base_url: Base URL for the TMS API (defaults to env var TMS_BASE_URL)
+            api_key: API key for authentication (alternative to username/password)
+            api_key_header: Header format for API key. Options:
+                - "Bearer" (default): Authorization: Bearer <api_key>
+                - "ApiKey": Authorization: ApiKey <api_key>
+                - "X-API-Key": Custom header X-API-Key: <api_key>
         """
-        self.username = username
-        self.password = password
+        # Check for API key in environment ONLY if not explicitly provided as parameter
+        # This ensures backwards compatibility - explicit parameters take precedence
+        api_key_was_provided = api_key is not None
+        if api_key is None:
+            api_key = os.getenv('TMS_API_KEY')
+        
+        # Check for username/password in environment ONLY if not explicitly provided as parameters
+        # This ensures backwards compatibility - explicit parameters take precedence
+        # BUT: if api_key exists (from param or env), don't load username/password from env
+        # to avoid conflicts
+        if not api_key:
+            # Only check env for username/password if api_key doesn't exist
+            if username is None:
+                username = os.getenv('TMS_USERNAME')
+            if password is None:
+                password = os.getenv('TMS_PASSWORD')
+        
+        # Validate authentication method - ensure only one method is used
+        if api_key and (username or password):
+            raise ValueError("Cannot use both api_key and username/password. Use either api_key OR username/password.")
+        
+        if api_key:
+            self.api_key = api_key
+            self.api_key_header = api_key_header
+            self.username = None
+            self.password = None
+            self.basic_auth = None
+            auth_method = "API Key"
+        elif username and password:
+            self.username = username
+            self.password = password
+            self.api_key = None
+            self.api_key_header = None
+            # Create base64 encoded basic auth header
+            credentials = f"{username}:{password}"
+            self.basic_auth = base64.b64encode(credentials.encode()).decode()
+            auth_method = "Basic Auth"
+        else:
+            raise ValueError(
+                "Authentication required. Provide either:\n"
+                "1. username and password: TMSClient(username='user', password='pass')\n"
+                "2. api_key: TMSClient(api_key='your-api-key')\n"
+                "3. Environment variables: TMS_USERNAME/TMS_PASSWORD or TMS_API_KEY"
+            )
+        
         self.base_url = base_url or os.getenv('TMS_BASE_URL')
         
         if not self.base_url:
             raise ValueError(
                 "TMS_BASE_URL must be provided. Options:\n"
-                "1. Pass as parameter: TMSClient(username, password, base_url='https://your-domain.com')\n"
+                "1. Pass as parameter: TMSClient(..., base_url='https://your-domain.com')\n"
                 "2. Set environment variable: TMS_BASE_URL=https://your-domain.com\n"
                 "3. Create .env file with: TMS_BASE_URL=https://your-domain.com"
             )
             
         # Remove trailing slash if present
         self.base_url = self.base_url.rstrip('/')
-        
-        # Create base64 encoded basic auth header
-        credentials = f"{username}:{password}"
-        self.basic_auth = base64.b64encode(credentials.encode()).decode()
         
         # Initialize session
         self.session = requests.Session()
@@ -92,15 +146,25 @@ class TMSClient:
         # Cache for charge codes (in memory)
         self._charge_codes_cache: Dict[str, Dict[str, Any]] = {}
         
-        # Set default headers including basic auth
-        self.session.headers.update({
+        # Set default headers with appropriate authentication
+        headers = {
             'User-Agent': 'TMS-Python-Client/1.0',
             'Accept': 'application/json',
-            'Authorization': f'Basic {self.basic_auth}',
             'X-com.mcleodsoftware.CompanyID': os.getenv('TMS_COMPANY_ID', 'TMS')
-        })
+        }
         
-        print(f"TMS Client initialized with Basic Auth for user: {username}")
+        if api_key:
+            if api_key_header == "X-API-Key":
+                headers['X-API-Key'] = api_key
+            else:
+                headers['Authorization'] = f'{api_key_header} {api_key}'
+        else:
+            headers['Authorization'] = f'Basic {self.basic_auth}'
+        
+        self.session.headers.update(headers)
+        
+        auth_user = username if username else "API Key"
+        print(f"TMS Client initialized with {auth_method} for user: {auth_user}")
     
     def _make_request(self, method: str, endpoint: str, company_id: Optional[str] = None, **kwargs) -> requests.Response:
         """
@@ -1040,15 +1104,22 @@ class TMSClient:
 if __name__ == "__main__":
     # Create a client instance
     # In production, you should get these from secure storage or environment variables
-    username = "your_username"
-    password = "your_password"
     
+    # Option 1: Username/password authentication
     try:
-        with TMSClient(username, password) as client:
+        with TMSClient("your_username", "your_password") as client:
             # Example API call - adjust endpoint based on actual API
             # response = client.get('/some/endpoint')
             print("TMS Client initialized successfully!")
             print(f"Using Basic Auth for user: {client.username}")
-            
+    except Exception as e:
+        print(f"Error: {e}")
+    
+    # Option 2: API key authentication
+    try:
+        with TMSClient(api_key="your-api-key") as client:
+            # Example API call
+            # response = client.get('/some/endpoint')
+            print("TMS Client initialized successfully with API key!")
     except Exception as e:
         print(f"Error: {e}")
