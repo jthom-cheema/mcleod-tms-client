@@ -1009,6 +1009,48 @@ class TMSClient:
         # Return the response as text (batch ID for staged upload)
         return response.text
     
+    def update_load(self, order_json: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Update a load with the provided order JSON.
+        
+        This sends the complete order JSON to the PUT /orders/update endpoint.
+        Useful for modifying reference numbers, stops, charges, or any other order data.
+        
+        Args:
+            order_json: Complete RowOrders JSON object with modifications
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            Updated RowOrders object from the API
+            
+        Raises:
+            Exception: If the update fails
+            
+        Examples:
+            >>> # Get current order
+            >>> order = client.get_load_json("5225506")
+            >>> 
+            >>> # Modify reference numbers
+            >>> order['reference_number'] = "NEW-REF-123"
+            >>> order['customer_reference_number'] = "CUST-REF-456"
+            >>> 
+            >>> # Update the order
+            >>> updated = client.update_load(order)
+            >>> print(f"Updated order {updated['id']}")
+            
+            >>> # Modify and update in different company
+            >>> order = client.get_load_json("5225506", company_id="TMS2")
+            >>> order['reference_number'] = "NEW-REF-123"
+            >>> updated = client.update_load(order, company_id="TMS2")
+        """
+        headers = {
+            "Content-Type": "application/json", 
+            "Accept": "application/json"
+        }
+        
+        response = self.put("/orders/update", json=order_json, headers=headers, company_id=company_id)
+        return response.json()
+
     def add_charge(self, order_id: str, charge_id: str, description: str, amount: float,
                    units: float = 1.0, calc_method: str = "F", company_id: Optional[str] = None) -> bool:
         """

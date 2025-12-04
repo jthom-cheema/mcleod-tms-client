@@ -284,6 +284,14 @@ class TMSClient:
         """Upload an image to the TMS object history (staging area)."""
         ...
     
+    def update_load(
+        self,
+        order_json: Dict[str, Any],
+        company_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update a load with the provided order JSON."""
+        ...
+    
     def add_charge(
         self, 
         order_id: str, 

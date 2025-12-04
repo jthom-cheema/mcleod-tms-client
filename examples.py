@@ -764,6 +764,56 @@ def example_user_search():
         print(f"Inactive users: {len(inactive_users)}")
 
 
+def example_update_load():
+    """Update a load with modified JSON."""
+    # Works with username/password or API key
+    with TMSClient("username", "password") as client:
+        order_id = "5225506"
+        
+        # Get current order JSON
+        order = client.get_load_json(order_id)
+        print(f"Current reference: {order.get('reference_number')}")
+        
+        # Modify reference numbers
+        order['reference_number'] = "NEW-REF-123"
+        order['customer_reference_number'] = "CUST-REF-456"
+        
+        # Update the order
+        updated = client.update_load(order)
+        print(f"Updated order {updated['id']}")
+        print(f"New reference: {updated.get('reference_number')}")
+        
+        # Automation example: pull, modify, update
+        orders_to_update = ["5225506", "5225507", "5225508"]
+        
+        for order_id in orders_to_update:
+            try:
+                # Pull current order
+                order = client.get_load_json(order_id)
+                
+                # Modify specific fields
+                old_ref = order.get('reference_number', '')
+                new_ref = f"{old_ref}-UPDATED"
+                order['reference_number'] = new_ref
+                
+                # Update the load
+                updated = client.update_load(order)
+                print(f"✅ Updated order {order_id}: {new_ref}")
+                
+            except Exception as e:
+                print(f"❌ Failed to update order {order_id}: {e}")
+        
+        # Modify multiple fields at once
+        order = client.get_load_json("5225506")
+        order['reference_number'] = "REF-001"
+        order['customer_reference_number'] = "CUST-001"
+        order['purchase_order_number'] = "PO-001"
+        order['special_instructions'] = "Updated via automation"
+        
+        updated = client.update_load(order)
+        print(f"Updated multiple fields for order {updated['id']}")
+
+
 def example_authentication_methods():
     """Different ways to authenticate with the TMS client."""
     # Method 1: Username and password (positional)
@@ -822,4 +872,5 @@ if __name__ == "__main__":
     print("- example_movement_change_monitoring()")
     print("- example_customer_search()")
     print("- example_user_search()")
+    print("- example_update_load()")
     print("- example_authentication_methods()")
