@@ -181,6 +181,19 @@ class TMSClient:
         """Search for locations by code or name."""
         ...
 
+    def search_orders(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        changed_after_date: Optional[Union[str, Any]] = None,
+        changed_after_type: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Search orders using flexible table.field criteria."""
+        ...
+
     def search_orders_by_bol(
         self,
         bol_numbers: Union[str, List[str]],

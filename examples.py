@@ -699,6 +699,113 @@ def example_movement_change_monitoring():
         print(f"\nAll CA movements changed in last hour: {len(all_changes)}")
 
 
+def example_order_search():
+    """Search orders with flexible criteria."""
+    from datetime import datetime, timedelta
+    
+    # Username/password or API key authentication
+    with TMSClient("username", "password") as client:
+        # Basic order search by status
+        print("=== Search Delivered Orders ===")
+        delivered = client.search_orders({"orders.status": "D"})
+        print(f"Found {len(delivered)} delivered orders")
+        
+        # Search by multiple criteria
+        print("\n=== Multi-Criteria Search ===")
+        orders = client.search_orders({
+            "orders.status": "P",
+            "shipper.state": "CA",
+            "consignee.state": "OR"
+        })
+        print(f"Found {len(orders)} in-progress orders from CA to OR")
+        
+        # Search with wildcard location
+        print("\n=== Wildcard Location Search ===")
+        warehouse_orders = client.search_orders({
+            "shipper.location_id": "WARE*",
+            "orders.status": "D"
+        })
+        print(f"Found {len(warehouse_orders)} delivered from WARE* locations")
+        
+        # Search by customer
+        print("\n=== Customer Search ===")
+        customer_orders = client.search_orders({
+            "customer.id": "HOMEATGA",
+            "orders.status": "D"
+        })
+        print(f"Found {len(customer_orders)} delivered orders for HOMEATGA")
+        
+        # Search with change tracking using string date
+        print("\n=== Change Tracking (String) ===")
+        recent = client.search_orders(
+            {"orders.status": "P"},
+            changed_after_date="20251201000000-0700",
+            changed_after_type="Add"
+        )
+        print(f"Found {len(recent)} orders added since 2025-12-01")
+        
+        # Search with datetime object
+        print("\n=== Change Tracking (Datetime) ===")
+        yesterday = datetime.now() - timedelta(days=1)
+        updated = client.search_orders(
+            {"orders.status": "P"},
+            changed_after_date=yesterday,
+            changed_after_type="Update"
+        )
+        print(f"Found {len(updated)} orders updated since yesterday")
+        
+        # Search with pagination and sorting
+        print("\n=== Pagination and Sorting ===")
+        page1 = client.search_orders(
+            {"orders.status": "P"},
+            order_by="orders.id+DESC",
+            record_length=50,
+            record_offset=0
+        )
+        print(f"Page 1: {len(page1)} orders")
+        
+        page2 = client.search_orders(
+            {"orders.status": "P"},
+            order_by="orders.id+DESC",
+            record_length=50,
+            record_offset=50
+        )
+        print(f"Page 2: {len(page2)} orders")
+        
+        # Search by pickup date range
+        print("\n=== Sort by Pickup Date ===")
+        by_pickup = client.search_orders(
+            {"orders.status": "P"},
+            order_by="shipper.sched_arrive_early+ASC"
+        )
+        print(f"Found {len(by_pickup)} in-progress orders sorted by pickup date")
+        
+        # Complex multi-field search
+        print("\n=== Complex Search ===")
+        complex_search = client.search_orders(
+            {
+                "shipper.state": "CA",
+                "consignee.state": "TX",
+                "orders.status": "P",
+                "orders.equipment_type_id": "V"
+            },
+            changed_after_date=datetime.now() - timedelta(days=7),
+            changed_after_type="Add",
+            order_by="orders.id+DESC",
+            record_length=100
+        )
+        print(f"Found {len(complex_search)} van loads CA->TX added in last 7 days")
+        
+        # Display sample order details
+        if complex_search:
+            print("\n=== Sample Order ===")
+            sample = complex_search[0]
+            print(f"Order ID: {sample.get('id')}")
+            print(f"Status: {sample.get('status')} - {sample.get('__statusDescr')}")
+            print(f"Customer: {sample.get('customer', {}).get('name', 'N/A')}")
+            print(f"Equipment: {sample.get('__equipmentTypeDescr', 'N/A')}")
+
+
 def example_user_search():
     """Searching for users by ID, name, or email."""
     # Supports username/password or API key
@@ -868,6 +975,7 @@ if __name__ == "__main__":
     print("- example_charge_codes_and_billing()")
     print("- example_order_management()")
     print("- example_bulk_charge_operations()")
+    print("- example_order_search()")
     print("- example_search_movements()")
     print("- example_movement_change_monitoring()")
     print("- example_customer_search()")

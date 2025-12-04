@@ -413,6 +413,113 @@ class TMSClient:
         return response.json()
     
     # Search helpers
+    def search_orders(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        changed_after_date: Optional[Union[str, datetime]] = None,
+        changed_after_type: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search orders using flexible table.field criteria with optional
+        change tracking window.
+
+        This calls the ``/orders/search`` endpoint and allows passing any
+        combination of prefixed fields supported by the API (e.g.,
+        ``orders.status``, ``shipper.location_id``, ``consignee.state``,
+        ``customer.id``, ``freightGroup.*``), along with optional
+        ``changedAfterDate`` and ``changedAfterType`` parameters.
+
+        Args:
+            filters: Mapping of query keys to values. Keys should include the
+                proper table/field prefix as required by the API
+                (for example: {"orders.status": "D", "shipper.location_id": "WARE*"}).
+                Supported prefixes:
+                - orders: Use `orders` or no prefix
+                - stop: Use `shipper` or `consignee` prefixes
+                - customer: Use `customer` prefix
+                - freight_group: Use `freightGroup` prefix
+            company_id: Optional override for Company ID header.
+            changed_after_date: Datetime or string for ``changedAfterDate``.
+                If a ``datetime`` is provided, it is formatted as
+                ``YYYYMMDDHHMMSS±ZZZZ``. Naive datetimes default to ``-0700``.
+            changed_after_type: One of ``"Add"`` or ``"Update"``.
+            order_by: Optional order by expression. Multiple columns may be
+                provided as a comma-delimited string per API docs.
+                Format: prefix.field+direction, prefix.field+direction
+                Default: orders.id+DESC
+            record_length: Optional page size.
+            record_offset: Optional page offset.
+
+        Returns:
+            List of RowOrders objects returned by the search.
+
+        Examples:
+            >>> # Search delivered orders
+            >>> client.search_orders({"orders.status": "D"})
+            
+            >>> # Search by shipper and consignee
+            >>> client.search_orders({
+            ...     "shipper.location_id": "WARE*",
+            ...     "consignee.state": "AL"
+            ... })
+            
+            >>> # Search with change tracking
+            >>> client.search_orders(
+            ...     {"orders.status": "P"},
+            ...     changed_after_date="20250102000000+0000",
+            ...     changed_after_type="Add",
+            ...     record_length=100,
+            ...     record_offset=0,
+            ... )
+            
+            >>> # Search with custom sorting
+            >>> client.search_orders(
+            ...     {"orders.status": "P"},
+            ...     order_by="shipper.sched_arrive_early+ASC"
+            ... )
+        """
+        # Start with a shallow copy to avoid mutating caller input
+        params: Dict[str, Any] = dict(filters or {})
+
+        # changedAfterDate formatting
+        if changed_after_date is not None:
+            if isinstance(changed_after_date, datetime):
+                dt = changed_after_date
+                # Default -0700 if naive
+                if dt.tzinfo is None:
+                    from datetime import timezone
+                    dt = dt.replace(tzinfo=timezone(timedelta(hours=-7)))
+                params["changedAfterDate"] = dt.strftime("%Y%m%d%H%M%S%z")
+            else:
+                # Allow caller to pass exact string expected by API
+                params["changedAfterDate"] = str(changed_after_date)
+
+        # changedAfterType validation/normalization
+        if changed_after_type is not None:
+            normalized = str(changed_after_type).strip().lower()
+            if normalized in ("add",):
+                params["changedAfterType"] = "Add"
+            elif normalized in ("update", "updated"):
+                params["changedAfterType"] = "Update"
+            else:
+                raise ValueError("changedAfterType must be 'Add' or 'Update'")
+
+        # Sorting and pagination
+        if order_by:
+            params["orderBy"] = order_by
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        results = self.get_json("/orders/search", company_id=company_id, params=params)
+        # Ensure list return type
+        return results if isinstance(results, list) else []
+
     def search_orders_by_bol(
         self,
         bol_numbers: Union[str, List[str]],
