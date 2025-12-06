@@ -750,6 +750,171 @@ class TMSClient:
         # Ensure list return type
         return results if isinstance(results, list) else []
 
+    def search_billing_history(
+        self,
+        bill_date: Union[str, datetime, None] = None,
+        company_id: Optional[str] = None,
+        include_users: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+        **additional_filters: Any,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search freight billing history records by bill_date and other criteria.
+        
+        Retrieves a list of historical freight billing records matching the given
+        request parameters. Supports relative date formats (e.g., "t-1" for yesterday)
+        and formatted dates, plus any combination of fields from the billing_history table.
+        
+        Args:
+            bill_date: Date to search for. Can be:
+                - Relative format string (e.g., "t-1" for yesterday, "t-100" for last 100 days)
+                - Comparison format (e.g., ">=t-100" for last 100 days)
+                - datetime object (formatted as YYYYMMDDHHMMSS±ZZZZ, naive defaults to -0700)
+                - String in API format (YYYYMMDDHHMMSS±ZZZZ)
+                - None to search without date filter
+            company_id: Optional override for Company ID header
+            include_users: Whether to include user detail records with each invoice
+            include_customer: Whether to include customer details with each invoice
+            record_length: Optional page size (API default is often 100, max 100)
+            record_offset: Optional offset for pagination (NOTE: API ignores this parameter)
+            auto_paginate: When True, fetches all pages using cursor-based pagination with 'id' field.
+                The API doesn't support offset-based pagination, so we use id > last_id to get next page.
+            **additional_filters: Additional search criteria from billing_history table.
+                Examples: is_summary_bill="Y", blnum="12345*", ship_date=">=t-100"
+                
+        Returns:
+            List of RowBillingHistory objects (billing_history records) matching the criteria
+            
+        Examples:
+            >>> # Search by relative date (yesterday)
+            >>> bills = client.search_billing_history("t-1")
+            
+            >>> # Search by relative date (last 100 days)
+            >>> bills = client.search_billing_history("t-100")
+            
+            >>> # Search with comparison operator
+            >>> bills = client.search_billing_history(">=t-100")
+            
+            >>> # Search using datetime
+            >>> from datetime import datetime
+            >>> bills = client.search_billing_history(
+            ...     datetime(2023, 4, 1, 0, 0, 0)
+            ... )
+            
+            >>> # Search using string date
+            >>> bills = client.search_billing_history("20230401000000-0700")
+            
+            >>> # Include user and customer details
+            >>> bills = client.search_billing_history(
+            ...     "t-1",
+            ...     include_users=True,
+            ...     include_customer=True
+            ... )
+            
+            >>> # Search with additional filters (summary bills with BOL pattern)
+            >>> bills = client.search_billing_history(
+            ...     ">=t-100",
+            ...     is_summary_bill="Y",
+            ...     blnum="12345*"
+            ... )
+            
+            >>> # Complex search with multiple criteria
+            >>> bills = client.search_billing_history(
+            ...     ship_date=">=t-100",
+            ...     is_summary_bill="Y",
+            ...     blnum="12345*",
+            ...     include_users=True,
+            ...     include_customer=True
+            ... )
+            
+            >>> # Auto-paginate to get all results (uses cursor-based pagination)
+            >>> all_bills = client.search_billing_history("t-1", auto_paginate=True)
+            >>> print(f"Got {len(all_bills)} total bills")
+        """
+        params: Dict[str, Any] = {}
+        
+        # Handle bill_date parameter
+        if bill_date is not None:
+            if isinstance(bill_date, datetime):
+                dt = bill_date
+                # Default -0700 if naive
+                if dt.tzinfo is None:
+                    from datetime import timezone
+                    dt = dt.replace(tzinfo=timezone(timedelta(hours=-7)))
+                params["bill_date"] = dt.strftime("%Y%m%d%H%M%S%z")
+            else:
+                # Allow caller to pass exact string expected by API (relative or formatted)
+                # McLeod API supports relative dates like "t-1" directly
+                params["bill_date"] = str(bill_date)
+        
+        # Add optional parameters (note: API uses includeUsers and includeCustomer)
+        if include_users is not None:
+            params["includeUsers"] = bool(include_users)
+        if include_customer is not None:
+            params["includeCustomer"] = bool(include_customer)
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+        
+        # Add any additional filters from billing_history table
+        params.update(additional_filters)
+        
+        # Auto-pagination: Use cursor-based pagination with 'id' field
+        # The API doesn't support recordOffset, but we can use id > last_id to get next page
+        if auto_paginate:
+            import sys
+            all_rows: List[Dict[str, Any]] = []
+            page_num = 0
+            max_pages = 50  # Safety limit
+            last_id = None
+            
+            print(f"Starting cursor-based pagination (using 'id' field)...", file=sys.stderr)
+            if "bill_date" in params:
+                print(f"  Date filter: {params['bill_date']}", file=sys.stderr)
+            
+            while page_num < max_pages:
+                page_num += 1
+                
+                # Create params for this page
+                page_params = dict(params)
+                
+                # Add id filter to get next batch (skip first page)
+                if last_id is not None:
+                    page_params["id"] = f">{last_id}"
+                
+                print(f"  Fetching page {page_num}...", file=sys.stderr, end='', flush=True)
+                
+                page = self.get_json("/billing/history", company_id=company_id, params=page_params)
+                
+                if not isinstance(page, list) or len(page) == 0:
+                    print(f" done. (0 results - end of data)", file=sys.stderr)
+                    break
+                
+                all_rows.extend(page)
+                print(f" done. ({len(page)} results, total: {len(all_rows)})", file=sys.stderr)
+                
+                # If we got fewer than 100, we're done
+                if len(page) < 100:
+                    break
+                
+                # Get the last id for next iteration
+                last_id = page[-1].get('id')
+                if not last_id:
+                    # If no id field, we can't paginate further
+                    print(f"  WARNING: No 'id' field found, stopping pagination", file=sys.stderr)
+                    break
+            
+            print(f"Pagination complete: {len(all_rows)} total results", file=sys.stderr)
+            return all_rows
+
+        # Single-page request (no auto-pagination)
+        return_rows = self.get_json("/billing/history", company_id=company_id, params=params)
+        return return_rows if isinstance(return_rows, list) else []
+
     # Convenience methods for common operations
     def get_available_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
         """

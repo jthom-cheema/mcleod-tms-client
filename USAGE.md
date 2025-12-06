@@ -155,6 +155,56 @@ success = client.add_charge(
 )
 ```
 
+### Billing History
+```python
+from datetime import datetime, timedelta
+
+# Search by relative date (yesterday)
+bills = client.search_billing_history("t-1")
+
+# Search last 100 days
+bills = client.search_billing_history("t-100")
+
+# Search with comparison operator
+bills = client.search_billing_history(">=t-100")
+
+# Search using datetime object
+seven_days_ago = datetime.now() - timedelta(days=7)
+bills = client.search_billing_history(seven_days_ago)
+
+# Search with string date
+bills = client.search_billing_history("20230401000000-0700")
+
+# Include user and customer details
+bills = client.search_billing_history(
+    "t-1",
+    include_users=True,
+    include_customer=True
+)
+
+# Search with additional filters (summary bills with BOL pattern)
+bills = client.search_billing_history(
+    ">=t-100",
+    is_summary_bill="Y",
+    blnum="12345*",
+    ship_date=">=t-100"
+)
+
+# Auto-paginate to get all results (API returns max 100 per call)
+# Uses cursor-based pagination with 'id' field since offset pagination isn't supported
+all_bills = client.search_billing_history("t-1", auto_paginate=True)
+print(f"Got {len(all_bills)} total bills (API limitation: 100 per call without pagination)")
+
+# Process results
+for bill in bills:
+    print(f"Invoice: {bill.get('invoice_no_string')}")
+    print(f"Bill Date: {bill.get('bill_date')}")
+    print(f"Customer: {bill.get('customer_id')}")
+    print(f"Total: ${bill.get('total_charges_n', 0)}")
+```
+
+**Note on Pagination**: The billing history endpoint returns a maximum of 100 results per call and does not support offset-based pagination (`recordOffset` is ignored). To retrieve all results, use `auto_paginate=True`, which uses cursor-based pagination with the `id` field to fetch all pages automatically.
+
 ### Miscellaneous Billing History
 ```python
 from datetime import datetime, timedelta

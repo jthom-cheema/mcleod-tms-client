@@ -292,6 +292,65 @@ with TMSClient("username", "password") as client:
         print(f"Location: {location.get('name')} (Code: {location.get('id')})")
 ```
 
+### Freight Billing History Search
+
+```python
+from tms_client import TMSClient
+from datetime import datetime, timedelta
+
+with TMSClient("username", "password") as client:
+    # Search by relative date (yesterday)
+    bills = client.search_billing_history("t-1")
+    
+    # Search last 100 days
+    bills = client.search_billing_history("t-100")
+    
+    # Search with comparison operator
+    bills = client.search_billing_history(">=t-100")
+    
+    # Search using datetime object
+    seven_days_ago = datetime.now() - timedelta(days=7)
+    bills = client.search_billing_history(seven_days_ago)
+    
+    # Search using string date
+    bills = client.search_billing_history("20230401000000-0700")
+    
+    # Include user and customer details
+    bills = client.search_billing_history(
+        "t-1",
+        include_users=True,
+        include_customer=True
+    )
+    
+    # Auto-paginate to get all results (API returns max 100 per call)
+    # Uses cursor-based pagination since offset pagination isn't supported
+    all_bills = client.search_billing_history("t-1", auto_paginate=True)
+    print(f"Got {len(all_bills)} total bills")
+    
+    # Search with additional filters (summary bills with BOL pattern)
+    bills = client.search_billing_history(
+        ">=t-100",
+        is_summary_bill="Y",
+        blnum="12345*",
+        ship_date=">=t-100"
+    )
+    
+    # Process results
+    for bill in bills:
+        print(f"Invoice: {bill.get('invoice_no_string')}")
+        print(f"Bill Date: {bill.get('bill_date')}")
+        print(f"Customer: {bill.get('customer_id')}")
+        print(f"Total: ${bill.get('total_charges_n', 0)}")
+```
+
+**Billing History Search Notes**:
+- **Pagination**: The API returns a maximum of 100 results per call and does not support offset-based pagination (`recordOffset` is ignored). Use `auto_paginate=True` to automatically fetch all results using cursor-based pagination with the `id` field. 
+- Supports relative date formats: `"t-1"` (yesterday), `"t-100"` (last 100 days)
+- Supports comparison operators: `">=t-100"` (greater than or equal to)
+- Supports datetime objects and formatted date strings
+- Can filter by any `billing_history` table fields as keyword arguments
+- Use `include_users=True` and `include_customer=True` to get related records
+
 ### Miscellaneous Billing History Search
 
 ```python

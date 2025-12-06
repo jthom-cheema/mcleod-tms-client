@@ -1,0 +1,6 @@
+Starting test...
+.env exists
+Import successful
+Username set: True
+Password set: True
+Client created

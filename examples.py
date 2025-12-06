@@ -921,6 +921,151 @@ def example_update_load():
         print(f"Updated multiple fields for order {updated['id']}")
 
 
+def example_billing_history_search():
+    """Search freight billing history by bill_date and other criteria."""
+    from datetime import datetime, timedelta
+    
+    # Username/password or API key authentication
+    with TMSClient("username", "password") as client:
+        # Basic search: yesterday's bills (relative date format)
+        print("=== Yesterday's Bills ===")
+        yesterday_bills = client.search_billing_history("t-1")
+        print(f"Found {len(yesterday_bills)} bills from yesterday")
+        for bill in yesterday_bills[:5]:  # Show first 5
+            print(f"  Invoice: {bill.get('invoice_no_string', 'N/A')}")
+            print(f"  Bill Date: {bill.get('bill_date', 'N/A')}")
+            print(f"  Total: ${bill.get('total_charges_n', 0)}")
+        
+        # Search last 100 days (relative date format)
+        print("\n=== Last 100 Days ===")
+        recent_bills = client.search_billing_history("t-100")
+        print(f"Found {len(recent_bills)} bills in last 100 days")
+        
+        # Search with comparison operator (greater than or equal to last 100 days)
+        print("\n=== Comparison Operator ===")
+        bills_since = client.search_billing_history(">=t-100")
+        print(f"Found {len(bills_since)} bills since 100 days ago")
+        
+        # Search using datetime object
+        print("\n=== Datetime Object ===")
+        from datetime import datetime
+        specific_date = datetime(2023, 4, 1, 0, 0, 0)
+        bills_from_date = client.search_billing_history(specific_date)
+        print(f"Found {len(bills_from_date)} bills from {specific_date.date()}")
+        
+        # Search using formatted string date
+        print("\n=== Formatted String Date ===")
+        bills_string = client.search_billing_history("20230401000000-0700")
+        print(f"Found {len(bills_string)} bills from formatted date")
+        
+        # Include user and customer details
+        print("\n=== With User and Customer Details ===")
+        detailed_bills = client.search_billing_history(
+            "t-1",
+            include_users=True,
+            include_customer=True
+        )
+        if detailed_bills:
+            bill = detailed_bills[0]
+            print(f"Invoice: {bill.get('invoice_no_string')}")
+            # Check for user details
+            if 'RowUsers' in bill:
+                print(f"Users: {bill['RowUsers']}")
+            # Check for customer details
+            if 'RowCustomer' in bill:
+                customer = bill['RowCustomer']
+                print(f"Customer: {customer.get('name', 'N/A')}")
+        
+        # Search with additional filters: summary bills
+        print("\n=== Summary Bills Only ===")
+        summary_bills = client.search_billing_history(
+            ">=t-100",
+            is_summary_bill="Y"
+        )
+        print(f"Found {len(summary_bills)} summary bills in last 100 days")
+        
+        # Search with BOL pattern matching
+        print("\n=== BOL Pattern Search ===")
+        bol_bills = client.search_billing_history(
+            ">=t-100",
+            blnum="12345*"  # Wildcard pattern
+        )
+        print(f"Found {len(bol_bills)} bills with BOL starting with '12345'")
+        
+        # Complex search: summary bills with BOL pattern and ship date
+        print("\n=== Complex Multi-Criteria Search ===")
+        complex_bills = client.search_billing_history(
+            ship_date=">=t-100",  # Shipped in last 100 days
+            is_summary_bill="Y",   # Summary bills only
+            blnum="12345*",        # BOL pattern
+            include_users=True,
+            include_customer=True
+        )
+        print(f"Found {len(complex_bills)} bills matching all criteria")
+        
+        # Process and analyze results
+        if complex_bills:
+            print("\n=== Analysis ===")
+            total_amount = sum(bill.get('total_charges_n', 0) for bill in complex_bills)
+            print(f"Total charges: ${total_amount:,.2f}")
+            print(f"Average per bill: ${total_amount / len(complex_bills):,.2f}")
+            
+            # Group by customer
+            by_customer = {}
+            for bill in complex_bills:
+                customer_id = bill.get('customer_id', 'Unknown')
+                if customer_id not in by_customer:
+                    by_customer[customer_id] = []
+                by_customer[customer_id].append(bill)
+            
+            print(f"\nBills by customer: {len(by_customer)} customers")
+            for customer_id, customer_bills in list(by_customer.items())[:5]:
+                customer_total = sum(b.get('total_charges_n', 0) for b in customer_bills)
+                print(f"  {customer_id}: {len(customer_bills)} bills, ${customer_total:,.2f}")
+        
+        # Search without date filter (all bills, may be slow)
+        print("\n=== All Bills (No Date Filter) ===")
+        try:
+            all_bills = client.search_billing_history(None)
+            print(f"Found {len(all_bills)} total bills")
+        except Exception as e:
+            print(f"Note: Searching without date filter may not be supported: {e}")
+        
+        # Search in different company
+        print("\n=== Different Company ===")
+        tms2_bills = client.search_billing_history(
+            "t-1",
+            company_id="TMS2"
+        )
+        print(f"Found {len(tms2_bills)} bills in TMS2 from yesterday")
+        
+        # Search with specific invoice number
+        print("\n=== Specific Invoice ===")
+        invoice_bills = client.search_billing_history(
+            invoice_no_string="12345"
+        )
+        print(f"Found {len(invoice_bills)} bills with invoice number 12345")
+        
+        # Auto-paginate to get all results (API limitation: max 100 per call)
+        # The API doesn't support offset pagination, so we use cursor-based pagination
+        print("\n=== Auto-Pagination (Get All Results) ===")
+        all_yesterday_bills = client.search_billing_history("t-1", auto_paginate=True)
+        print(f"Got {len(all_yesterday_bills)} total bills from yesterday")
+        print("Note: Without auto_paginate, you'd only get the first 100 results")
+        
+        # Display sample bill structure
+        if yesterday_bills:
+            print("\n=== Sample Bill Structure ===")
+            sample = yesterday_bills[0]
+            print("Available fields:")
+            for key in sorted(sample.keys())[:20]:  # Show first 20 fields
+                value = sample[key]
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    print(f"  {key}: {value}")
+                else:
+                    print(f"  {key}: {type(value).__name__}")
+
+
 def example_authentication_methods():
     """Different ways to authenticate with the TMS client."""
     # Method 1: Username and password (positional)
@@ -981,4 +1126,5 @@ if __name__ == "__main__":
     print("- example_customer_search()")
     print("- example_user_search()")
     print("- example_update_load()")
+    print("- example_billing_history_search()")
     print("- example_authentication_methods()")
