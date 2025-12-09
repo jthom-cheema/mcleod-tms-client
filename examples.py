@@ -806,6 +806,42 @@ def example_order_search():
             print(f"Equipment: {sample.get('__equipmentTypeDescr', 'N/A')}")
 
 
+def example_carrier_search():
+    """Searching for carriers by ID or name."""
+    # Supports username/password or API key
+    with TMSClient("username", "password") as client:
+        # Search by carrier ID
+        carriers = client.search_carriers("CONSVAWA")
+        if carriers:
+            carrier = carriers[0]
+            print(f"Found: {carrier.get('name')} (ID: {carrier.get('id')})")
+            print(f"  MC#: {carrier.get('mc_number', 'N/A')}")
+            print(f"  DOT#: {carrier.get('dot_number', 'N/A')}")
+            print(f"  Phone: {carrier.get('phone', 'N/A')}")
+            print(f"  Active: {carrier.get('is_active', False)}")
+        
+        # Search by carrier name
+        swift_carriers = client.search_carriers("Swift")
+        print(f"\nFound {len(swift_carriers)} carriers matching 'Swift'")
+        for carrier in swift_carriers[:5]:  # Show first 5
+            print(f"  - {carrier.get('id')}: {carrier.get('name')}")
+        
+        # Search in different company
+        tms2_carriers = client.search_carriers("CONSVAWA", company_id="TMS2")
+        print(f"\nFound {len(tms2_carriers)} carrier(s) in TMS2")
+        
+        # Get carrier details and display key fields
+        carriers = client.search_carriers("CONSVAWA")
+        if carriers:
+            carrier = carriers[0]
+            print(f"\nCarrier details for {carrier.get('id')}:")
+            print(f"  Name: {carrier.get('name')}")
+            print(f"  Address: {carrier.get('address1')}")
+            print(f"  City: {carrier.get('city_name')}, {carrier.get('state')} {carrier.get('zip_code')}")
+            print(f"  MC Number: {carrier.get('mc_number')}")
+            print(f"  DOT Number: {carrier.get('dot_number')}")
+
+
 def example_user_search():
     """Searching for users by ID, name, or email."""
     # Supports username/password or API key
@@ -1124,6 +1160,7 @@ if __name__ == "__main__":
     print("- example_search_movements()")
     print("- example_movement_change_monitoring()")
     print("- example_customer_search()")
+    print("- example_carrier_search()")
     print("- example_user_search()")
     print("- example_update_load()")
     print("- example_billing_history_search()")

@@ -394,6 +394,52 @@ class TMSClient:
         results = self.get_json("/locations", company_id=company_id, params=params)
         return results if isinstance(results, list) else []
 
+    def search_carriers(self, query: str, company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Search for carriers by ID or name.
+        
+        Args:
+            query: String to search for carriers by ID or name (e.g., "CONSVAWA")
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID`
+        
+        Returns:
+            List of RowPayee objects matching the search query. Each carrier object contains:
+            
+            **Common Fields:**
+            - ``id`` (str): Carrier ID (e.g., "CONSVAWA")
+            - ``name`` (str): Carrier name
+            - ``address1`` (str): Street address
+            - ``city`` (str): City
+            - ``state`` (str): State code
+            - ``zip_code`` (str): ZIP code
+            - ``phone_number`` (str): Phone number
+            - ``status`` (str): Status code (A=Active)
+            - ``email`` (str): Email address(es)
+            
+            **Nested in drsPayee (carrier-specific data):**
+            - ``dot_number`` (str): DOT number
+            - ``icc_number`` (str): MC/ICC number
+            - ``power_units`` (int): Number of power units
+            - ``drivers`` (int): Number of drivers
+            - ``liability_amount`` (float): Liability insurance amount
+            - ``cargo_ins_amount`` (float): Cargo insurance amount
+            - ``safety_rating`` (str): Safety rating
+            - ``out_of_service`` (bool): Whether carrier is out of service
+            
+            Returns empty list if no carriers match the query.
+            
+        Examples:
+            >>> carriers = client.search_carriers("CONSVAWA", company_id="TMS2")
+            >>> if carriers:
+            ...     c = carriers[0]
+            ...     print(f"{c['id']}: {c['name']}")
+            ...     drs = c.get('drsPayee', {})
+            ...     print(f"DOT#: {drs.get('dot_number')} | MC#: {drs.get('icc_number')}")
+        """
+        params = {"q": query} if query else {}
+        results = self.get_json("/carriers", company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
     def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.

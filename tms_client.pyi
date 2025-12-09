@@ -181,6 +181,14 @@ class TMSClient:
         """Search for locations by code or name."""
         ...
 
+    def search_carriers(
+        self,
+        query: str,
+        company_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search for carriers by ID or name."""
+        ...
+
     def search_orders(
         self,
         filters: Dict[str, Any],

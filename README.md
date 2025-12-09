@@ -292,6 +292,27 @@ with TMSClient("username", "password") as client:
         print(f"Location: {location.get('name')} (Code: {location.get('id')})")
 ```
 
+### Carrier Search
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Search by carrier ID
+    carriers = client.search_carriers("CONSVAWA")
+    
+    # Search by carrier name
+    carriers = client.search_carriers("Swift")
+    
+    # Search in different company
+    carriers = client.search_carriers("CONSVAWA", company_id="TMS2")
+    
+    # Process results
+    for carrier in carriers:
+        print(f"Carrier: {carrier.get('name')} (ID: {carrier.get('id')})")
+        print(f"MC#: {carrier.get('mc_number')} | DOT#: {carrier.get('dot_number')}")
+```
+
 ### Freight Billing History Search
 
 ```python

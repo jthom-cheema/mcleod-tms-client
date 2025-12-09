@@ -85,6 +85,23 @@ all_customers = client.search_customers("")
 tms2_customers = client.search_customers("ACME", company_id="TMS2")
 ```
 
+### Carriers
+```python
+# Search carriers by ID
+carriers = client.search_carriers("CONSVAWA")
+
+# Search carriers by name
+carriers = client.search_carriers("Swift")
+
+# Search in different company
+tms2_carriers = client.search_carriers("CONSVAWA", company_id="TMS2")
+
+# Process results
+for carrier in carriers:
+    print(f"Carrier: {carrier.get('name')} (ID: {carrier.get('id')})")
+    print(f"MC#: {carrier.get('mc_number')} | DOT#: {carrier.get('dot_number')}")
+```
+
 ### Movements
 ```python
 from datetime import datetime
