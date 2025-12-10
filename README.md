@@ -298,13 +298,21 @@ with TMSClient("username", "password") as client:
 from tms_client import TMSClient
 
 with TMSClient("username", "password") as client:
-    # Search by carrier ID
+    # Get carrier by 8-character code (recommended for exact matches)
+    carrier = client.get_carrier_by_code("SUNNTRCA")
+    if carrier:
+        print(f"Carrier: {carrier.get('name')} (ID: {carrier.get('id')})")
+        drs = carrier.get('drsPayee', {})
+        print(f"DOT#: {drs.get('dot_number')} | MC#: {drs.get('icc_number')}")
+    
+    # Search by carrier ID or name (returns list)
     carriers = client.search_carriers("CONSVAWA")
     
     # Search by carrier name
     carriers = client.search_carriers("Swift")
     
     # Search in different company
+    carrier = client.get_carrier_by_code("SUNNTRCA", company_id="TMS2")
     carriers = client.search_carriers("CONSVAWA", company_id="TMS2")
     
     # Process results
@@ -312,6 +320,8 @@ with TMSClient("username", "password") as client:
         print(f"Carrier: {carrier.get('name')} (ID: {carrier.get('id')})")
         print(f"MC#: {carrier.get('mc_number')} | DOT#: {carrier.get('dot_number')}")
 ```
+<｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
+run_terminal_cmd
 
 ### Freight Billing History Search
 

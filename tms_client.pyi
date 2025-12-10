@@ -188,6 +188,14 @@ class TMSClient:
     ) -> List[Dict[str, Any]]:
         """Search for carriers by ID or name."""
         ...
+    
+    def get_carrier_by_code(
+        self,
+        carrier_code: str,
+        company_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Get a carrier profile by its 8-character carrier code."""
+        ...
 
     def search_orders(
         self,

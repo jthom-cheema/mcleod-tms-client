@@ -810,11 +810,28 @@ def example_carrier_search():
     """Searching for carriers by ID or name."""
     # Supports username/password or API key
     with TMSClient("username", "password") as client:
-        # Search by carrier ID
+        # Get carrier by 8-character code (recommended for exact matches)
+        carrier = client.get_carrier_by_code("SUNNTRCA")
+        if carrier:
+            print(f"Found: {carrier.get('name')} (ID: {carrier.get('id')})")
+            drs = carrier.get('drsPayee', {})
+            print(f"  MC#: {drs.get('icc_number', 'N/A')}")
+            print(f"  DOT#: {drs.get('dot_number', 'N/A')}")
+            print(f"  Phone: {carrier.get('phone_number', 'N/A')}")
+            print(f"  Status: {carrier.get('status', 'N/A')}")
+            print(f"  Address: {carrier.get('address1', 'N/A')}")
+            print(f"  City: {carrier.get('city', 'N/A')}, {carrier.get('state', 'N/A')} {carrier.get('zip_code', 'N/A')}")
+        
+        # Get carrier from different company
+        tms2_carrier = client.get_carrier_by_code("SUNNTRCA", company_id="TMS2")
+        if tms2_carrier:
+            print(f"\nTMS2 Carrier: {tms2_carrier.get('name')}")
+        
+        # Search by carrier ID (returns list, useful for partial matches)
         carriers = client.search_carriers("CONSVAWA")
         if carriers:
             carrier = carriers[0]
-            print(f"Found: {carrier.get('name')} (ID: {carrier.get('id')})")
+            print(f"\nFound: {carrier.get('name')} (ID: {carrier.get('id')})")
             print(f"  MC#: {carrier.get('mc_number', 'N/A')}")
             print(f"  DOT#: {carrier.get('dot_number', 'N/A')}")
             print(f"  Phone: {carrier.get('phone', 'N/A')}")

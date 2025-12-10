@@ -87,13 +87,21 @@ tms2_customers = client.search_customers("ACME", company_id="TMS2")
 
 ### Carriers
 ```python
-# Search carriers by ID
+# Get carrier by 8-character code
+carrier = client.get_carrier_by_code("SUNNTRCA")
+if carrier:
+    print(f"Carrier: {carrier.get('name')} (ID: {carrier.get('id')})")
+    drs = carrier.get('drsPayee', {})
+    print(f"DOT#: {drs.get('dot_number')} | MC#: {drs.get('icc_number')}")
+
+# Search carriers by ID or name (returns list)
 carriers = client.search_carriers("CONSVAWA")
 
 # Search carriers by name
 carriers = client.search_carriers("Swift")
 
 # Search in different company
+tms2_carrier = client.get_carrier_by_code("SUNNTRCA", company_id="TMS2")
 tms2_carriers = client.search_carriers("CONSVAWA", company_id="TMS2")
 
 # Process results

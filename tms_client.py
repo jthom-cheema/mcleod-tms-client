@@ -440,6 +440,88 @@ class TMSClient:
         results = self.get_json("/carriers", company_id=company_id, params=params)
         return results if isinstance(results, list) else []
 
+    def get_carrier_by_code(self, carrier_code: str, company_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get a carrier profile by its 8-character carrier code.
+        
+        This method queries the GET /carriers endpoint with the carrier code
+        and returns a single RowPayee object if found. Carrier codes are typically
+        8 characters (e.g., "SUNNTRCA", "CONSVAWA").
+        
+        Args:
+            carrier_code: 8-character carrier code (e.g., "SUNNTRCA")
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID` header.
+                Defaults to the company ID set during client initialization or TMS_COMPANY_ID env var.
+        
+        Returns:
+            RowPayee dictionary for the carrier if found, None otherwise. The carrier object contains:
+            
+            **Common Fields:**
+            - ``id`` (str): Carrier ID (8-character code, e.g., "SUNNTRCA")
+            - ``name`` (str): Carrier name
+            - ``address1`` (str): Street address
+            - ``city`` (str): City
+            - ``state`` (str): State code
+            - ``zip_code`` (str): ZIP code
+            - ``phone_number`` (str): Phone number
+            - ``status`` (str): Status code (A=Active)
+            - ``email`` (str): Email address(es)
+            
+            **Nested in drsPayee (carrier-specific data):**
+            - ``dot_number`` (str): DOT number
+            - ``icc_number`` (str): MC/ICC number
+            - ``power_units`` (int): Number of power units
+            - ``drivers`` (int): Number of drivers
+            - ``liability_amount`` (float): Liability insurance amount
+            - ``cargo_ins_amount`` (float): Cargo insurance amount
+            - ``safety_rating`` (str): Safety rating
+            - ``out_of_service`` (bool): Whether carrier is out of service
+            
+            Returns None if no carrier matches the code.
+        
+        Raises:
+            Exception: If API request fails (authentication, network, etc.)
+        
+        Examples:
+            Get carrier by 8-character code:
+            >>> carrier = client.get_carrier_by_code("SUNNTRCA")
+            >>> if carrier:
+            ...     print(f"Found: {carrier['name']} (ID: {carrier['id']})")
+            ...     drs = carrier.get('drsPayee', {})
+            ...     print(f"DOT#: {drs.get('dot_number')} | MC#: {drs.get('icc_number')}")
+            
+            Get carrier from TMS2:
+            >>> carrier = client.get_carrier_by_code("SUNNTRCA", company_id="TMS2")
+            >>> if carrier:
+            ...     print(f"Carrier: {carrier['name']}")
+            ...     print(f"Status: {carrier.get('status')}")
+            
+            Check if carrier exists:
+            >>> carrier = client.get_carrier_by_code("INVALID")
+            >>> if not carrier:
+            ...     print("Carrier not found")
+        """
+        if not carrier_code:
+            return None
+        
+        # Strip whitespace and uppercase for consistency
+        carrier_code = carrier_code.strip().upper()
+        
+        # Query the /carriers endpoint with the code
+        params = {"q": carrier_code}
+        results = self.get_json("/carriers", company_id=company_id, params=params)
+        
+        if not isinstance(results, list) or len(results) == 0:
+            return None
+        
+        # Find exact match by ID (case-insensitive)
+        for carrier in results:
+            if carrier.get('id', '').upper() == carrier_code:
+                return carrier
+        
+        # If no exact match, return first result (API may return partial matches)
+        return results[0] if results else None
+
     def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.
