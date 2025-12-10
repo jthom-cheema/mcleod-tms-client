@@ -963,6 +963,23 @@ def example_billing_history_search():
     
     # Username/password or API key authentication
     with TMSClient("username", "password") as client:
+        # Single-page enforced pagination (100 max). If API returns more, it is trimmed.
+        print("=== Single Page (enforced 100) ===")
+        page = client.search_billing_history("t-1", company_id="TMS")
+        print(f"Got {len(page)} rows (<=100)")
+        
+        # Auto-paginate to fetch all results via cursor-based pagination
+        print("\n=== Auto-paginate ALL ===")
+        all_rows = client.search_billing_history("t-1", company_id="TMS", auto_paginate=True)
+        print(f"Got {len(all_rows)} total rows")
+        
+        # Range query also paginates; single page trimmed to 100, auto gets all
+        print("\n=== Range Query (>=t-30) ===")
+        range_page = client.search_billing_history(">=t-30", company_id="TMS")
+        range_all = client.search_billing_history(">=t-30", company_id="TMS", auto_paginate=True)
+        print(f"Range first page: {len(range_page)} rows (<=100)")
+        print(f"Range all rows:   {len(range_all)}")
+        
         # Basic search: yesterday's bills (relative date format)
         print("=== Yesterday's Bills ===")
         yesterday_bills = client.search_billing_history("t-1")

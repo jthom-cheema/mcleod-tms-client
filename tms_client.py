@@ -824,10 +824,10 @@ class TMSClient:
             company_id: Optional override for Company ID header
             include_users: Whether to include user detail records with each invoice
             include_customer: Whether to include customer details with each invoice
-            record_length: Optional page size (API default is often 100, max 100)
-            record_offset: Optional offset for pagination (NOTE: API ignores this parameter)
-            auto_paginate: When True, fetches all pages using cursor-based pagination with 'id' field.
-                The API doesn't support offset-based pagination, so we use id > last_id to get next page.
+            record_length: Optional page size (default 100, max 100)
+            record_offset: Optional offset (NOTE: API ignores this; use auto_paginate instead)
+            auto_paginate: When True, fetches all pages using cursor-based pagination 
+                with 'id > last_id'. Use this to get all results when there may be >100.
             **additional_filters: Additional search criteria from billing_history table.
                 Examples: is_summary_bill="Y", blnum="12345*", ship_date=">=t-100"
                 
@@ -835,51 +835,25 @@ class TMSClient:
             List of RowBillingHistory objects (billing_history records) matching the criteria
             
         Examples:
-            >>> # Search by relative date (yesterday)
+            >>> # Search yesterday (may be capped at 100)
             >>> bills = client.search_billing_history("t-1")
             
-            >>> # Search by relative date (last 100 days)
-            >>> bills = client.search_billing_history("t-100")
+            >>> # Search with auto-pagination to get ALL results
+            >>> all_bills = client.search_billing_history("t-1", auto_paginate=True)
             
-            >>> # Search with comparison operator
-            >>> bills = client.search_billing_history(">=t-100")
-            
-            >>> # Search using datetime
-            >>> from datetime import datetime
-            >>> bills = client.search_billing_history(
-            ...     datetime(2023, 4, 1, 0, 0, 0)
-            ... )
-            
-            >>> # Search using string date
-            >>> bills = client.search_billing_history("20230401000000-0700")
+            >>> # Range query with pagination
+            >>> all_bills = client.search_billing_history(">=t-100", auto_paginate=True)
             
             >>> # Include user and customer details
             >>> bills = client.search_billing_history(
             ...     "t-1",
             ...     include_users=True,
-            ...     include_customer=True
+            ...     include_customer=True,
+            ...     auto_paginate=True
             ... )
-            
-            >>> # Search with additional filters (summary bills with BOL pattern)
-            >>> bills = client.search_billing_history(
-            ...     ">=t-100",
-            ...     is_summary_bill="Y",
-            ...     blnum="12345*"
-            ... )
-            
-            >>> # Complex search with multiple criteria
-            >>> bills = client.search_billing_history(
-            ...     ship_date=">=t-100",
-            ...     is_summary_bill="Y",
-            ...     blnum="12345*",
-            ...     include_users=True,
-            ...     include_customer=True
-            ... )
-            
-            >>> # Auto-paginate to get all results (uses cursor-based pagination)
-            >>> all_bills = client.search_billing_history("t-1", auto_paginate=True)
-            >>> print(f"Got {len(all_bills)} total bills")
         """
+        import sys
+        
         params: Dict[str, Any] = {}
         
         # Handle bill_date parameter
@@ -892,39 +866,29 @@ class TMSClient:
                     dt = dt.replace(tzinfo=timezone(timedelta(hours=-7)))
                 params["bill_date"] = dt.strftime("%Y%m%d%H%M%S%z")
             else:
-                # Allow caller to pass exact string expected by API (relative or formatted)
-                # McLeod API supports relative dates like "t-1" directly
                 params["bill_date"] = str(bill_date)
         
-        # Add optional parameters (note: API uses includeUsers and includeCustomer)
+        # Add optional parameters
         if include_users is not None:
             params["includeUsers"] = bool(include_users)
         if include_customer is not None:
             params["includeCustomer"] = bool(include_customer)
-        if record_length is not None:
-            params["recordLength"] = int(record_length)
+        # Enforce 100-record pages by default for consistency across companies
+        page_size = int(record_length) if record_length is not None else 100
+        params["recordLength"] = page_size
         if record_offset is not None:
             params["recordOffset"] = int(record_offset)
         
         # Add any additional filters from billing_history table
         params.update(additional_filters)
         
-        # Auto-pagination: Use cursor-based pagination with 'id' field
-        # The API doesn't support recordOffset, but we can use id > last_id to get next page
+        # Auto-pagination using cursor-based 'id > last_id'
         if auto_paginate:
-            import sys
             all_rows: List[Dict[str, Any]] = []
-            page_num = 0
-            max_pages = 50  # Safety limit
+            max_pages = 100  # Safety limit (10,000 records max)
             last_id = None
             
-            print(f"Starting cursor-based pagination (using 'id' field)...", file=sys.stderr)
-            if "bill_date" in params:
-                print(f"  Date filter: {params['bill_date']}", file=sys.stderr)
-            
-            while page_num < max_pages:
-                page_num += 1
-                
+            for page_num in range(1, max_pages + 1):
                 # Create params for this page
                 page_params = dict(params)
                 
@@ -932,34 +896,47 @@ class TMSClient:
                 if last_id is not None:
                     page_params["id"] = f">{last_id}"
                 
-                print(f"  Fetching page {page_num}...", file=sys.stderr, end='', flush=True)
-                
                 page = self.get_json("/billing/history", company_id=company_id, params=page_params)
                 
                 if not isinstance(page, list) or len(page) == 0:
-                    print(f" done. (0 results - end of data)", file=sys.stderr)
                     break
                 
                 all_rows.extend(page)
-                print(f" done. ({len(page)} results, total: {len(all_rows)})", file=sys.stderr)
                 
-                # If we got fewer than 100, we're done
-                if len(page) < 100:
+                # Continue only when we got exactly the enforced page_size
+                if len(page) != page_size:
+                    if len(page) > page_size:
+                        print(
+                            f"WARNING: API ignored recordLength={page_size} and returned {len(page)} rows; "
+                            f"treating as last page.",
+                            file=sys.stderr,
+                        )
                     break
                 
                 # Get the last id for next iteration
                 last_id = page[-1].get('id')
                 if not last_id:
-                    # If no id field, we can't paginate further
-                    print(f"  WARNING: No 'id' field found, stopping pagination", file=sys.stderr)
+                    print(f"WARNING: No 'id' field in response, cannot paginate further", 
+                          file=sys.stderr)
                     break
             
-            print(f"Pagination complete: {len(all_rows)} total results", file=sys.stderr)
             return all_rows
 
         # Single-page request (no auto-pagination)
         return_rows = self.get_json("/billing/history", company_id=company_id, params=params)
-        return return_rows if isinstance(return_rows, list) else []
+        if not isinstance(return_rows, list):
+            return []
+
+        # Enforce page_size on single-page calls for consistent pagination to consumers
+        if len(return_rows) > page_size:
+            print(
+                f"WARNING: API ignored recordLength={page_size} and returned {len(return_rows)} rows; "
+                f"trimming to first {page_size} for pagination consistency.",
+                file=sys.stderr,
+            )
+            return_rows = return_rows[:page_size]
+
+        return return_rows
 
     # Convenience methods for common operations
     def get_available_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:

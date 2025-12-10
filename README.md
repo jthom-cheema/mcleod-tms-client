@@ -365,12 +365,31 @@ with TMSClient("username", "password") as client:
 ```
 
 **Billing History Search Notes**:
-- **Pagination**: The API returns a maximum of 100 results per call and does not support offset-based pagination (`recordOffset` is ignored). Use `auto_paginate=True` to automatically fetch all results using cursor-based pagination with the `id` field. 
+- **Pagination (enforced)**: The client forces `recordLength=100` by default. Single-page calls are trimmed to 100 rows even if the API returns more, so consumers always receive paginated batches. Use `auto_paginate=True` to fetch all records via cursor (`id > last_id`).
+- **API quirks**: Some companies (e.g., TMS2) may ignore `recordLength` and return all rows in one response; the client will log a warning. Auto-pagination still returns the full dataset.
 - Supports relative date formats: `"t-1"` (yesterday), `"t-100"` (last 100 days)
 - Supports comparison operators: `">=t-100"` (greater than or equal to)
 - Supports datetime objects and formatted date strings
 - Can filter by any `billing_history` table fields as keyword arguments
 - Use `include_users=True` and `include_customer=True` to get related records
+
+**Billing History Examples**:
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Single page (enforced 100 max). If API sends more, it is trimmed to 100.
+    first_page = client.search_billing_history(bill_date="t-1", company_id="TMS")
+    print(f"Page size: {len(first_page)}")  # <= 100
+
+    # All pages (cursor-based). Returns every row.
+    all_rows = client.search_billing_history(bill_date="t-1", company_id="TMS", auto_paginate=True)
+    print(f"Total rows: {len(all_rows)}")
+
+    # Range query also paginates; auto_paginate gets everything.
+    range_first_page = client.search_billing_history(bill_date=">=t-30", company_id="TMS")
+    range_all = client.search_billing_history(bill_date=">=t-30", company_id="TMS", auto_paginate=True)
+```
 
 ### Miscellaneous Billing History Search
 
