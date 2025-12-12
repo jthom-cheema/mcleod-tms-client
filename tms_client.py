@@ -814,6 +814,7 @@ class TMSClient:
         order_by: Optional[str] = None,
         record_length: Optional[int] = None,
         record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Search settlements using flexible table.field criteria with optional
@@ -842,8 +843,11 @@ class TMSClient:
                 provided as a comma-delimited string per API docs.
                 Format: prefix.field+direction, prefix.field+direction
                 Default: settlement.transfer_date+DESC
-            record_length: Optional page size.
-            record_offset: Optional page offset.
+            record_length: Optional page size (default 100 if auto_paginate is True).
+            record_offset: Optional page offset (ignored if auto_paginate is True).
+            auto_paginate: When True, automatically fetches all pages by incrementing
+                record_offset until no more results are returned. Use this to get all
+                results when there may be more than one page.
 
         Returns:
             List of RowSettlement objects returned by the search.
@@ -878,7 +882,46 @@ class TMSClient:
             ...     {"settlement.payee_id": "*"},
             ...     order_by="settlement.ok2pay_date+DESC"
             ... )
+            
+            >>> # Search with auto-pagination to get ALL results
+            >>> all_settlements = client.search_settlements(
+            ...     {"settlement.ready_to_pay_flag": "n"},
+            ...     auto_paginate=True
+            ... )
         """
+        # Auto-pagination using offset-based pagination
+        if auto_paginate:
+            all_rows: List[Dict[str, Any]] = []
+            page_size = int(record_length) if record_length is not None else 100
+            max_pages = 1000  # Safety limit (100,000 records max)
+            offset = 0
+            
+            for page_num in range(1, max_pages + 1):
+                page_results = self.search_settlements(
+                    filters=filters,
+                    company_id=company_id,
+                    changed_after_date=changed_after_date,
+                    changed_after_type=changed_after_type,
+                    order_by=order_by,
+                    record_length=page_size,
+                    record_offset=offset,
+                    auto_paginate=False,  # Prevent recursion
+                )
+                
+                if not page_results or len(page_results) == 0:
+                    break
+                
+                all_rows.extend(page_results)
+                
+                # If we got fewer results than requested, we're done
+                if len(page_results) < page_size:
+                    break
+                
+                offset += page_size
+            
+            return all_rows
+        
+        # Single-page request (no auto-pagination)
         # Start with a shallow copy to avoid mutating caller input
         params: Dict[str, Any] = dict(filters or {})
 
@@ -923,6 +966,7 @@ class TMSClient:
         order_by: Optional[str] = None,
         record_length: Optional[int] = None,
         record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
     ) -> List[Dict[str, Any]]:
         """
         Get settlements that are on hold (not ready to pay).
@@ -936,8 +980,11 @@ class TMSClient:
             order_by: Optional order by expression. Multiple columns may be
                 provided as a comma-delimited string.
                 Default: settlement.transfer_date+DESC
-            record_length: Optional page size.
-            record_offset: Optional page offset.
+            record_length: Optional page size (default 100 if auto_paginate is True).
+            record_offset: Optional page offset (ignored if auto_paginate is True).
+            auto_paginate: When True, automatically fetches all pages by incrementing
+                record_offset until no more results are returned. Use this to get all
+                results when there may be more than one page.
 
         Returns:
             List of RowSettlement objects that are on hold.
@@ -960,6 +1007,9 @@ class TMSClient:
             >>> # Get settlements on hold from different company
             >>> tms2_settlements = client.get_settlements_on_hold(company_id="TMS2")
             
+            >>> # Get all settlements on hold (auto-paginate)
+            >>> all_on_hold = client.get_settlements_on_hold(auto_paginate=True)
+            
             >>> # Process results
             >>> for settlement in settlements:
             ...     print(f"Settlement ID: {settlement.get('id')}")
@@ -972,6 +1022,7 @@ class TMSClient:
             order_by=order_by,
             record_length=record_length,
             record_offset=record_offset,
+            auto_paginate=auto_paginate,
         )
 
     def search_misc_billing_history(

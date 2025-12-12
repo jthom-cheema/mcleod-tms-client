@@ -239,6 +239,7 @@ class TMSClient:
         order_by: Optional[str] = None,
         record_length: Optional[int] = None,
         record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
     ) -> List[Dict[str, Any]]:
         """Search settlements using flexible table.field criteria."""
         ...
@@ -249,6 +250,7 @@ class TMSClient:
         order_by: Optional[str] = None,
         record_length: Optional[int] = None,
         record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
     ) -> List[Dict[str, Any]]:
         """Get settlements that are on hold (not ready to pay)."""
         ...
