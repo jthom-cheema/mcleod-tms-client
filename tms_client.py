@@ -805,6 +805,175 @@ class TMSClient:
         # Ensure list return type
         return results if isinstance(results, list) else []
 
+    def search_settlements(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        changed_after_date: Optional[Union[str, datetime]] = None,
+        changed_after_type: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search settlements using flexible table.field criteria with optional
+        change tracking window.
+
+        This calls the ``/settlements/search`` endpoint and allows passing any
+        combination of prefixed fields supported by the API (e.g.,
+        ``settlement.ok2pay_date``, ``settlement.ready_to_pay_flag``, ``movement.loaded``,
+        ``payee.id``), along with optional ``changedAfterDate`` and
+        ``changedAfterType`` parameters.
+
+        Args:
+            filters: Mapping of query keys to values. Keys should include the
+                proper table/field prefix as required by the API
+                (for example: {"settlement.ready_to_pay_flag": "n", "movement.loaded": "L"}).
+                Supported prefixes:
+                - settlement: Use `settlement` or no prefix
+                - movement: Use `movement` prefix
+                - payee: Use `payee` prefix
+            company_id: Optional override for Company ID header.
+            changed_after_date: Datetime or string for ``changedAfterDate``.
+                If a ``datetime`` is provided, it is formatted as
+                ``YYYYMMDDHHMMSS±ZZZZ``. Naive datetimes default to ``-0700``.
+            changed_after_type: One of ``"Add"`` or ``"Update"``.
+            order_by: Optional order by expression. Multiple columns may be
+                provided as a comma-delimited string per API docs.
+                Format: prefix.field+direction, prefix.field+direction
+                Default: settlement.transfer_date+DESC
+            record_length: Optional page size.
+            record_offset: Optional page offset.
+
+        Returns:
+            List of RowSettlement objects returned by the search.
+
+        Examples:
+            >>> # Search settlements on hold (not ready to pay)
+            >>> client.search_settlements({"settlement.ready_to_pay_flag": "n"})
+            
+            >>> # Search by payee and ok to pay date
+            >>> client.search_settlements({
+            ...     "settlement.payee_id": "*",
+            ...     "settlement.ok2pay_date": ">=t-7"
+            ... })
+            
+            >>> # Search settlements for loaded movements
+            >>> client.search_settlements({
+            ...     "settlement.ready_to_pay_flag": "n",
+            ...     "movement.loaded": "L"
+            ... })
+            
+            >>> # Search with change tracking
+            >>> client.search_settlements(
+            ...     {"settlement.loaded": "L"},
+            ...     changed_after_date="20250102000000+0000",
+            ...     changed_after_type="Add",
+            ...     record_length=100,
+            ...     record_offset=0,
+            ... )
+            
+            >>> # Search with custom sorting
+            >>> client.search_settlements(
+            ...     {"settlement.payee_id": "*"},
+            ...     order_by="settlement.ok2pay_date+DESC"
+            ... )
+        """
+        # Start with a shallow copy to avoid mutating caller input
+        params: Dict[str, Any] = dict(filters or {})
+
+        # changedAfterDate formatting
+        if changed_after_date is not None:
+            if isinstance(changed_after_date, datetime):
+                dt = changed_after_date
+                # Default -0700 if naive
+                if dt.tzinfo is None:
+                    from datetime import timezone
+                    dt = dt.replace(tzinfo=timezone(timedelta(hours=-7)))
+                params["changedAfterDate"] = dt.strftime("%Y%m%d%H%M%S%z")
+            else:
+                # Allow caller to pass exact string expected by API
+                params["changedAfterDate"] = str(changed_after_date)
+
+        # changedAfterType validation/normalization
+        if changed_after_type is not None:
+            normalized = str(changed_after_type).strip().lower()
+            if normalized in ("add",):
+                params["changedAfterType"] = "Add"
+            elif normalized in ("update", "updated"):
+                params["changedAfterType"] = "Update"
+            else:
+                raise ValueError("changedAfterType must be 'Add' or 'Update'")
+
+        # Sorting and pagination
+        if order_by:
+            params["orderBy"] = order_by
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        results = self.get_json("/settlements/search", company_id=company_id, params=params)
+        # Ensure list return type
+        return results if isinstance(results, list) else []
+
+    def get_settlements_on_hold(
+        self,
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get settlements that are on hold (not ready to pay).
+
+        This is a convenience method that searches for settlements where
+        ``ready_to_pay_flag`` is "n" (not ready to pay). Equivalent to calling
+        ``search_settlements({"settlement.ready_to_pay_flag": "n"})``.
+
+        Args:
+            company_id: Optional override for Company ID header.
+            order_by: Optional order by expression. Multiple columns may be
+                provided as a comma-delimited string.
+                Default: settlement.transfer_date+DESC
+            record_length: Optional page size.
+            record_offset: Optional page offset.
+
+        Returns:
+            List of RowSettlement objects that are on hold.
+
+        Examples:
+            >>> # Get all settlements on hold
+            >>> settlements = client.get_settlements_on_hold()
+            
+            >>> # Get settlements on hold with pagination
+            >>> page = client.get_settlements_on_hold(
+            ...     record_length=100,
+            ...     record_offset=0
+            ... )
+            
+            >>> # Get settlements on hold sorted by ok to pay date
+            >>> settlements = client.get_settlements_on_hold(
+            ...     order_by="settlement.ok2pay_date+DESC"
+            ... )
+            
+            >>> # Get settlements on hold from different company
+            >>> tms2_settlements = client.get_settlements_on_hold(company_id="TMS2")
+            
+            >>> # Process results
+            >>> for settlement in settlements:
+            ...     print(f"Settlement ID: {settlement.get('id')}")
+            ...     print(f"Payee: {settlement.get('payee_id')}")
+            ...     print(f"Amount: ${settlement.get('amount', 0)}")
+        """
+        return self.search_settlements(
+            filters={"settlement.ready_to_pay_flag": "n"},
+            company_id=company_id,
+            order_by=order_by,
+            record_length=record_length,
+            record_offset=record_offset,
+        )
+
     def search_misc_billing_history(
         self,
         bill_date_after: Union[str, datetime],

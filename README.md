@@ -144,6 +144,55 @@ with TMSClient("username", "password") as client:
 
 **Supported Filter Prefixes**: `movement` (or no prefix), `origin`, `destination`, `driver`, `driver2`, `tractor`, `trailer`, `trailer2`, `trailer3`
 
+## Settlement Search
+
+The client provides flexible settlement search with change tracking:
+
+```python
+from tms_client import TMSClient
+from datetime import datetime
+
+with TMSClient("username", "password") as client:
+    # Get settlements on hold (convenience method)
+    on_hold = client.get_settlements_on_hold()
+    
+    # Search settlements with filters
+    settlements = client.search_settlements({
+        "settlement.ready_to_pay_flag": "n",
+        "movement.loaded": "L"
+    })
+    
+    # Search by payee and ok to pay date
+    recent = client.search_settlements({
+        "settlement.payee_id": "*",
+        "settlement.ok2pay_date": ">=t-7"
+    })
+    
+    # Search with change tracking (string or datetime)
+    updated = client.search_settlements(
+        {"settlement.loaded": "L"},
+        changed_after_date="20251012000000-0700",
+        changed_after_type="Add"
+    )
+    
+    # Using datetime object (naive datetimes default to -0700)
+    settlements = client.search_settlements(
+        {"settlement.ready_to_pay_flag": "n"},
+        changed_after_date=datetime(2025, 10, 12, 0, 0, 0),
+        changed_after_type="Update",
+        order_by="settlement.ok2pay_date+DESC",
+        record_length=100,
+        record_offset=0
+    )
+    
+    # Get settlements on hold with sorting
+    sorted_on_hold = client.get_settlements_on_hold(
+        order_by="settlement.ok2pay_date+DESC"
+    )
+```
+
+**Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
+
 ## Image Upload
 
 The client provides functionality to upload images to McLeod TMS object history:

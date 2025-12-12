@@ -1136,6 +1136,106 @@ def example_billing_history_search():
                     print(f"  {key}: {type(value).__name__}")
 
 
+def example_settlement_search():
+    """Search settlements with flexible filters."""
+    from datetime import datetime, timedelta
+    
+    # Username/password or API key authentication
+    with TMSClient("username", "password") as client:
+        # Get settlements on hold (convenience method)
+        print("=== Settlements On Hold ===")
+        on_hold = client.get_settlements_on_hold()
+        print(f"Found {len(on_hold)} settlements on hold")
+        for settlement in on_hold[:5]:  # Show first 5
+            print(f"  Settlement ID: {settlement.get('id')}")
+            print(f"  Payee: {settlement.get('payee_id')}")
+            print(f"  Amount: ${settlement.get('amount', 0)}")
+        
+        # Get settlements on hold with sorting
+        print("\n=== Settlements On Hold (Sorted by OK2Pay Date) ===")
+        sorted_on_hold = client.get_settlements_on_hold(
+            order_by="settlement.ok2pay_date+DESC"
+        )
+        print(f"Found {len(sorted_on_hold)} settlements")
+        
+        # Search settlements by ready to pay flag
+        print("\n=== Search Settlements On Hold ===")
+        settlements = client.search_settlements({"settlement.ready_to_pay_flag": "n"})
+        print(f"Found {len(settlements)} settlements on hold")
+        
+        # Search by payee and ok to pay date
+        print("\n=== Settlements for All Payees (Last 7 Days) ===")
+        recent_settlements = client.search_settlements({
+            "settlement.payee_id": "*",
+            "settlement.ok2pay_date": ">=t-7"
+        })
+        print(f"Found {len(recent_settlements)} settlements")
+        
+        # Search settlements for loaded movements
+        print("\n=== Settlements for Loaded Movements On Hold ===")
+        loaded_settlements = client.search_settlements({
+            "settlement.ready_to_pay_flag": "n",
+            "movement.loaded": "L"
+        })
+        print(f"Found {len(loaded_settlements)} settlements")
+        
+        # Search with change tracking (datetime object)
+        print("\n=== Recently Added Settlements ===")
+        from datetime import timezone
+        yesterday = datetime.now(timezone(timedelta(hours=-7))) - timedelta(days=1)
+        recent_added = client.search_settlements(
+            {"settlement.loaded": "L"},
+            changed_after_date=yesterday,
+            changed_after_type="Add"
+        )
+        print(f"Found {len(recent_added)} recently added settlements")
+        
+        # Search with change tracking (string format)
+        print("\n=== Recently Updated Settlements ===")
+        updated_settlements = client.search_settlements(
+            {"settlement.ready_to_pay_flag": "n"},
+            changed_after_date="t-1",
+            changed_after_type="Update",
+            record_length=100,
+            record_offset=0
+        )
+        print(f"Found {len(updated_settlements)} recently updated settlements")
+        
+        # Search with custom sorting
+        print("\n=== Settlements Sorted by OK2Pay Date ===")
+        sorted_settlements = client.search_settlements(
+            {"settlement.payee_id": "*"},
+            order_by="settlement.ok2pay_date+DESC"
+        )
+        print(f"Found {len(sorted_settlements)} settlements")
+        
+        # Search with pagination
+        print("\n=== Paginated Settlements ===")
+        page = client.search_settlements(
+            {"settlement.ready_to_pay_flag": "n"},
+            record_length=100,
+            record_offset=0
+        )
+        print(f"Page 1: {len(page)} settlements")
+        
+        # Search in different company
+        print("\n=== Settlements in TMS2 ===")
+        tms2_settlements = client.get_settlements_on_hold(company_id="TMS2")
+        print(f"Found {len(tms2_settlements)} settlements on hold in TMS2")
+        
+        # Display sample settlement structure
+        if on_hold:
+            print("\n=== Sample Settlement Structure ===")
+            sample = on_hold[0]
+            print("Available fields:")
+            for key in sorted(sample.keys())[:20]:  # Show first 20 fields
+                value = sample[key]
+                if isinstance(value, (str, int, float, bool, type(None))):
+                    print(f"  {key}: {value}")
+                else:
+                    print(f"  {key}: {type(value).__name__}")
+
+
 def example_authentication_methods():
     """Different ways to authenticate with the TMS client."""
     # Method 1: Username and password (positional)
@@ -1198,4 +1298,5 @@ if __name__ == "__main__":
     print("- example_user_search()")
     print("- example_update_load()")
     print("- example_billing_history_search()")
+    print("- example_settlement_search()")
     print("- example_authentication_methods()")

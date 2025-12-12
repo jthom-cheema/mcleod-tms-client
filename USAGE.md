@@ -143,6 +143,61 @@ page = client.search_movements(
 )
 ```
 
+### Settlements
+```python
+from datetime import datetime
+
+# Get settlements on hold (convenience method)
+settlements = client.get_settlements_on_hold()
+
+# Search settlements with flexible filters
+settlements = client.search_settlements({
+    "settlement.ready_to_pay_flag": "n",
+    "movement.loaded": "L"
+})
+
+# Search by payee and ok to pay date
+settlements = client.search_settlements({
+    "settlement.payee_id": "*",
+    "settlement.ok2pay_date": ">=t-7"
+})
+
+# Search with change tracking (datetime or string)
+recent = client.search_settlements(
+    {"settlement.loaded": "L"},
+    changed_after_date="20251012000000-0700",
+    changed_after_type="Add"
+)
+
+# With datetime object (naive defaults to -0700)
+settlements = client.search_settlements(
+    {"settlement.ready_to_pay_flag": "n"},
+    changed_after_date=datetime(2025, 10, 12),
+    changed_after_type="Update"
+)
+
+# With pagination and sorting
+page = client.search_settlements(
+    {"settlement.payee_id": "*"},
+    order_by="settlement.ok2pay_date+DESC",
+    record_length=100,
+    record_offset=0
+)
+
+# Get settlements on hold with sorting
+sorted_on_hold = client.get_settlements_on_hold(
+    order_by="settlement.ok2pay_date+DESC"
+)
+
+# Process results
+for settlement in settlements:
+    print(f"Settlement ID: {settlement.get('id')}")
+    print(f"Payee: {settlement.get('payee_id')}")
+    print(f"Amount: ${settlement.get('amount', 0)}")
+```
+
+**Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
+
 ### Images & Documents
 ```python
 # Get available images for an order
