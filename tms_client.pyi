@@ -196,6 +196,14 @@ class TMSClient:
     ) -> Optional[Dict[str, Any]]:
         """Get a carrier profile by its 8-character carrier code."""
         ...
+    
+    def get_factoring_company(
+        self,
+        factor_code: str,
+        company_id: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """Get factoring company information by factor code using the table row service."""
+        ...
 
     def search_orders(
         self,

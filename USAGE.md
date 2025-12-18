@@ -110,6 +110,26 @@ for carrier in carriers:
     print(f"MC#: {carrier.get('mc_number')} | DOT#: {carrier.get('dot_number')}")
 ```
 
+### Factoring Companies
+```python
+# Get factoring company by factor code
+factor = client.get_factoring_company("APEXFOTX")
+if factor:
+    print(f"Factor: {factor.get('name')} (ID: {factor.get('id')})")
+    print(f"Address: {factor.get('address')}")
+    print(f"City: {factor.get('city')}, {factor.get('state')} {factor.get('zip_code')}")
+    print(f"Phone: {factor.get('phone_number')}")
+    print(f"Email: {factor.get('email')}")
+
+# Get factoring company from different company
+tms2_factor = client.get_factoring_company("APEXFOTX", company_id="TMS2")
+
+# Check if factoring company exists
+factor = client.get_factoring_company("INVALID")
+if not factor:
+    print("Factoring company not found")
+```
+
 ### Movements
 ```python
 from datetime import datetime

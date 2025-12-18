@@ -859,6 +859,45 @@ def example_carrier_search():
             print(f"  DOT Number: {carrier.get('dot_number')}")
 
 
+def example_factoring_company_search():
+    """Retrieving factoring company information by factor code."""
+    # Supports username/password or API key
+    with TMSClient("username", "password") as client:
+        # Get factoring company by factor code
+        factor = client.get_factoring_company("APEXFOTX")
+        if factor:
+            print(f"Found: {factor.get('name')} (ID: {factor.get('id')})")
+            print(f"  Address: {factor.get('address', 'N/A')}")
+            print(f"  City: {factor.get('city', 'N/A')}, {factor.get('state', 'N/A')} {factor.get('zip_code', 'N/A')}")
+            print(f"  Phone: {factor.get('phone_number', 'N/A')}")
+            print(f"  Email: {factor.get('email', 'N/A')}")
+            print(f"  Payment Method: {factor.get('payment_method', 'N/A')}")
+            
+            # Check for nested state_row if present
+            if 'state_row' in factor:
+                state = factor['state_row']
+                print(f"  State Info: {state.get('name', 'N/A')} ({state.get('id', 'N/A')})")
+        
+        # Get factoring company from different company
+        tms2_factor = client.get_factoring_company("APEXFOTX", company_id="TMS2")
+        if tms2_factor:
+            print(f"\nTMS2 Factor: {tms2_factor.get('name')}")
+        
+        # Check if factoring company exists
+        invalid_factor = client.get_factoring_company("INVALID")
+        if not invalid_factor:
+            print("\nFactoring company 'INVALID' not found")
+        
+        # Process multiple factoring companies
+        factor_codes = ["APEXFOTX", "FACTOR1", "FACTOR2"]
+        for code in factor_codes:
+            factor = client.get_factoring_company(code)
+            if factor:
+                print(f"\n{code}: {factor.get('name')}")
+            else:
+                print(f"\n{code}: Not found")
+
+
 def example_user_search():
     """Searching for users by ID, name, or email."""
     # Supports username/password or API key
@@ -1295,6 +1334,7 @@ if __name__ == "__main__":
     print("- example_movement_change_monitoring()")
     print("- example_customer_search()")
     print("- example_carrier_search()")
+    print("- example_factoring_company_search()")
     print("- example_user_search()")
     print("- example_update_load()")
     print("- example_billing_history_search()")

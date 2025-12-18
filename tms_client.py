@@ -522,6 +522,65 @@ class TMSClient:
         # If no exact match, return first result (API may return partial matches)
         return results[0] if results else None
 
+    def get_factoring_company(self, factor_code: str, company_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """
+        Get factoring company information by factor code using the table row service.
+        
+        This method uses the GET /{table}/{id} endpoint (table row service) to retrieve
+        factoring company data. The endpoint requires the table name "factoring_company"
+        and the factor code as the ID.
+        
+        Args:
+            factor_code: Factor code (e.g., "APEXFOTX")
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID` header.
+                Defaults to the company ID set during client initialization or TMS_COMPANY_ID env var.
+        
+        Returns:
+            Dictionary containing factoring company information if found, None otherwise.
+            The structure depends on the API response but typically includes fields like:
+            - ``id`` (str): Factor code
+            - ``name`` (str): Factoring company name
+            - Additional fields as returned by the API
+            
+            Returns None if no factoring company matches the code or if the request fails.
+        
+        Raises:
+            Exception: If API request fails (authentication, network, etc.)
+        
+        Examples:
+            Get factoring company by code:
+            >>> factor = client.get_factoring_company("APEXFOTX")
+            >>> if factor:
+            ...     print(f"Found: {factor.get('name')} (ID: {factor.get('id')})")
+            
+            Get factoring company from TMS2:
+            >>> factor = client.get_factoring_company("APEXFOTX", company_id="TMS2")
+            >>> if factor:
+            ...     print(f"Factor: {factor.get('name')}")
+            
+            Check if factoring company exists:
+            >>> factor = client.get_factoring_company("INVALID")
+            >>> if not factor:
+            ...     print("Factoring company not found")
+        """
+        if not factor_code:
+            return None
+        
+        # Strip whitespace and uppercase for consistency
+        factor_code = factor_code.strip().upper()
+        
+        # Use table row service endpoint: GET /{table}/{id}
+        # Table is "factoring_company", ID is the factor code
+        try:
+            result = self.get_json(f"/factoring_company/{factor_code}", company_id=company_id)
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            # If 404 or similar, return None instead of raising
+            if "404" in str(e) or "not found" in str(e).lower():
+                return None
+            # Re-raise other exceptions
+            raise
+
     def post_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
         """
         Make a POST request with JSON data and return JSON response.

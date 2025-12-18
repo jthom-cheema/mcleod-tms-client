@@ -369,6 +369,30 @@ with TMSClient("username", "password") as client:
         print(f"Carrier: {carrier.get('name')} (ID: {carrier.get('id')})")
         print(f"MC#: {carrier.get('mc_number')} | DOT#: {carrier.get('dot_number')}")
 ```
+
+### Factoring Company Search
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Get factoring company by factor code
+    factor = client.get_factoring_company("APEXFOTX")
+    if factor:
+        print(f"Factor: {factor.get('name')} (ID: {factor.get('id')})")
+        print(f"Address: {factor.get('address')}")
+        print(f"City: {factor.get('city')}, {factor.get('state')} {factor.get('zip_code')}")
+        print(f"Phone: {factor.get('phone_number')}")
+        print(f"Email: {factor.get('email')}")
+    
+    # Get factoring company from different company
+    tms2_factor = client.get_factoring_company("APEXFOTX", company_id="TMS2")
+    
+    # Check if factoring company exists
+    factor = client.get_factoring_company("INVALID")
+    if not factor:
+        print("Factoring company not found")
+```
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
 run_terminal_cmd
 
