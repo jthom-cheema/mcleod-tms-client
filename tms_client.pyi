@@ -296,6 +296,31 @@ class TMSClient:
     ) -> List[Dict[str, Any]]:
         """Search pending deductions by movement ID, with optional fallback to history."""
         ...
+
+    def search_settlement_history(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Search settlement history (paid/processed settlements) using flexible table.field criteria."""
+        ...
+
+    def is_movement_paid(
+        self,
+        movement_id: Union[str, int],
+        company_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Check if a movement has been paid by looking up settlement history.
+        
+        Returns the settlement history record if paid (with pay_date, check_number, total_pay, etc.),
+        or None if not yet paid.
+        """
+        ...
     
     # Image and document methods
     def get_available_images(

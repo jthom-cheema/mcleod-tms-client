@@ -2073,6 +2073,163 @@ class TMSClient:
         
         return []
 
+    def search_settlement_history(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search settlement history using flexible table.field criteria.
+
+        This endpoint returns settlements that have been paid/processed, including
+        payment details like check_number, pay_date, and total_pay.
+
+        Args:
+            filters: Dictionary of filter criteria. Supports the following prefixes:
+                - drs_settle_hist: Use `drs_settle_hist` or no prefix (e.g., movement_id, payee_id, pay_date)
+                - movement: Use `movement` prefix
+                - payee: Use `payee` prefix
+            company_id: Optional override for Company ID header.
+            order_by: Optional order by expression. Multiple columns may be
+                provided as a comma-delimited string.
+                Format: prefix.field+direction, prefix.field+direction
+                Default: drs_settle_hist.transfer_date+DESC
+            record_length: Optional page size.
+            record_offset: Optional page offset (ignored if auto_paginate is True).
+            auto_paginate: When True, automatically fetches all pages.
+
+        Returns:
+            List of drs_settle_hist objects with nested movement, payee, and
+            pending_deductions (historical deductions) data.
+
+        Examples:
+            >>> # Check if a movement has been paid
+            >>> history = client.search_settlement_history(
+            ...     {"drs_settle_hist.movement_id": "1234721"},
+            ...     company_id="TMS2"
+            ... )
+            >>> if history:
+            ...     record = history[0]
+            ...     print(f"Paid on: {record['pay_date']}")
+            ...     print(f"Check #: {record['check_number']}")
+            ...     print(f"Total: ${record['total_pay']}")
+            
+            >>> # Search by payee
+            >>> history = client.search_settlement_history(
+            ...     {"drs_settle_hist.payee_id": "JSDHMACA"},
+            ...     company_id="TMS2"
+            ... )
+            
+            >>> # Search recent payments (last 7 days)
+            >>> history = client.search_settlement_history(
+            ...     {"drs_settle_hist.pay_date": ">=t-7", "movement.loaded": "L"},
+            ...     company_id="TMS2"
+            ... )
+        """
+        # Auto-pagination
+        if auto_paginate:
+            all_rows: List[Dict[str, Any]] = []
+            page_size = int(record_length) if record_length is not None else 100
+            max_pages = 1000
+            offset = 0
+            
+            for _ in range(max_pages):
+                page_results = self.search_settlement_history(
+                    filters=filters,
+                    company_id=company_id,
+                    order_by=order_by,
+                    record_length=page_size,
+                    record_offset=offset,
+                    auto_paginate=False,
+                )
+                
+                if not page_results:
+                    break
+                
+                all_rows.extend(page_results)
+                
+                if len(page_results) < page_size:
+                    break
+                
+                offset += page_size
+            
+            return all_rows
+        
+        # Single-page request
+        params: Dict[str, Any] = dict(filters or {})
+
+        if order_by:
+            params["orderBy"] = order_by
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        results = self.get_json("/settlements/history/search", company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
+    def is_movement_paid(
+        self,
+        movement_id: Union[str, int],
+        company_id: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Check if a movement has been paid by looking up settlement history.
+
+        This is the cleanest way to confirm payment status for a movement.
+        Returns the settlement history record if paid, None if not yet paid.
+
+        Args:
+            movement_id: The movement ID to check (e.g., "1234721" or 1234721)
+            company_id: Optional override for Company ID header.
+
+        Returns:
+            If paid: Dictionary with payment details including:
+                - pay_date: When the payment was made
+                - check_number: The check/wire reference number
+                - total_pay: Total amount paid
+                - is_void: Whether the payment was voided
+                - payee_id: The carrier/payee ID
+                - movement: Nested movement details
+                - payee: Nested payee details
+                - pending_deductions: Historical deductions for this settlement
+            If not paid: None
+
+        Examples:
+            >>> # Check if movement 1234721 has been paid
+            >>> payment = client.is_movement_paid("1234721", company_id="TMS2")
+            >>> if payment:
+            ...     print(f"✓ PAID on {payment['pay_date']}")
+            ...     print(f"  Check #: {payment['check_number']}")
+            ...     print(f"  Amount: ${payment['total_pay']}")
+            ... else:
+            ...     print("✗ Not yet paid")
+            
+            >>> # Use in conditional logic
+            >>> if client.is_movement_paid(movement_id):
+            ...     print("Movement has been settled")
+            ... else:
+            ...     print("Movement is still pending payment")
+        """
+        history = self.search_settlement_history(
+            filters={"drs_settle_hist.movement_id": str(movement_id)},
+            company_id=company_id,
+        )
+        
+        if history:
+            # Return the first (and typically only) record
+            record = history[0]
+            # Check if voided
+            if record.get("is_void"):
+                return None
+            return record
+        
+        return None
+
     def close(self) -> None:
         """Close the session."""
         self.session.close()

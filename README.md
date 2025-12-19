@@ -277,6 +277,54 @@ with TMSClient("username", "password") as client:
 
 **Supported Filter Prefixes**: `drs_deduct_hist` (or no prefix), `movement`, `payee`
 
+## Settlement History & Payment Confirmation
+
+The cleanest way to confirm if a movement has been paid:
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Simple payment check - returns record if paid, None if not
+    payment = client.is_movement_paid("1234721", company_id="TMS2")
+    
+    if payment:
+        print(f"✓ PAID on {payment['pay_date']}")
+        print(f"  Check #: {payment['check_number']}")
+        print(f"  Amount: ${payment['total_pay']}")
+    else:
+        print("✗ Not yet paid")
+    
+    # Search settlement history with flexible filters
+    history = client.search_settlement_history(
+        {"drs_settle_hist.movement_id": "1234721"},
+        company_id="TMS2"
+    )
+    
+    # Search by payee
+    history = client.search_settlement_history(
+        {"drs_settle_hist.payee_id": "JSDHMACA"},
+        company_id="TMS2"
+    )
+    
+    # Search recent payments (last 7 days)
+    history = client.search_settlement_history(
+        {"drs_settle_hist.pay_date": ">=t-7", "movement.loaded": "L"},
+        company_id="TMS2"
+    )
+```
+
+**Key Fields in Settlement History**:
+- `pay_date`: When the payment was made
+- `check_number`: Check/wire reference number
+- `total_pay`: Total amount paid
+- `is_void`: Whether the payment was voided
+- `movement`: Nested movement details
+- `payee`: Nested payee details
+- `pending_deductions`: Historical deductions for this settlement
+
+**Supported Filter Prefixes**: `drs_settle_hist` (or no prefix), `movement`, `payee`
+
 ## Image Upload
 
 The client provides functionality to upload images to McLeod TMS object history:

@@ -302,6 +302,49 @@ for deduction in history:
 
 **Supported Filter Prefixes**: `drs_deduct_hist` (or no prefix), `movement`, `payee`
 
+### Settlement History & Payment Confirmation
+```python
+# Simple payment check - returns record if paid, None if not
+payment = client.is_movement_paid("1234721", company_id="TMS2")
+
+if payment:
+    print(f"✓ PAID on {payment['pay_date']}")
+    print(f"  Check #: {payment['check_number']}")
+    print(f"  Amount: ${payment['total_pay']}")
+else:
+    print("✗ Not yet paid")
+
+# Search settlement history with filters
+history = client.search_settlement_history(
+    {"drs_settle_hist.movement_id": "1234721"},
+    company_id="TMS2"
+)
+
+# Search by payee
+history = client.search_settlement_history(
+    {"drs_settle_hist.payee_id": "JSDHMACA"},
+    company_id="TMS2"
+)
+
+# Search recent payments (last 7 days)
+history = client.search_settlement_history(
+    {"drs_settle_hist.pay_date": ">=t-7"},
+    company_id="TMS2"
+)
+
+# Process results
+for record in history:
+    print(f"Movement: {record.get('movement_id')}")
+    print(f"Pay Date: {record.get('pay_date')}")
+    print(f"Check #: {record.get('check_number')}")
+    print(f"Total: ${record.get('total_pay', 0)}")
+    print(f"Voided: {record.get('is_void')}")
+```
+
+**Key Fields**: `pay_date`, `check_number`, `total_pay`, `is_void`, `movement_id`, `payee_id`
+
+**Supported Filter Prefixes**: `drs_settle_hist` (or no prefix), `movement`, `payee`
+
 ### Images & Documents
 ```python
 # Get available images for an order
