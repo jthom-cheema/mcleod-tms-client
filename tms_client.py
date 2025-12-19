@@ -1906,6 +1906,11 @@ class TMSClient:
         history deductions have been processed and include payment information like
         check_date, check_number, and process_status.
 
+        ⚠️ **IMPORTANT**: This endpoint requires Basic Authentication (username/password)
+        and does NOT accept API key authentication. This is a server-side limitation
+        of the McLeod TMS API. If you initialize the client with an API key, this
+        function will raise a clear error message explaining the requirement.
+
         Args:
             filters: Mapping of query keys to values. Keys should include the
                 proper table/field prefix as required by the API
@@ -1927,8 +1932,13 @@ class TMSClient:
         Returns:
             List of RowDrsDeductHist objects returned by the search.
 
+        Raises:
+            Exception: If authentication fails with API key, provides a helpful error
+                message explaining that Basic Auth is required.
+
         Examples:
-            >>> # Search deduction history by movement ID
+            >>> # Search deduction history by movement ID (requires username/password)
+            >>> client = TMSClient("username", "password")  # Not api_key!
             >>> client.search_deductions_history({"drs_deduct_hist.movement_id": "1180935"})
             
             >>> # Search by payee and transaction date
@@ -1985,8 +1995,22 @@ class TMSClient:
             params["recordOffset"] = int(record_offset)
 
         # Note: The endpoint is /deductions/history (not /deductions/history/search)
-        results = self.get_json("/deductions/history", company_id=company_id, params=params)
-        return results if isinstance(results, list) else []
+        # IMPORTANT: This endpoint may require Basic Auth instead of API key
+        # If API key auth fails, we'll catch and provide a helpful error
+        try:
+            results = self.get_json("/deductions/history", company_id=company_id, params=params)
+            return results if isinstance(results, list) else []
+        except Exception as e:
+            error_msg = str(e)
+            # Check if it's a 401 auth error and we're using API key
+            if "401" in error_msg and self.api_key:
+                raise Exception(
+                    f"The /deductions/history endpoint requires Basic Authentication (username/password), "
+                    f"not API key authentication. Please initialize TMSClient with username and password "
+                    f"instead of api_key to use this endpoint. Original error: {error_msg}"
+                )
+            # Re-raise other errors as-is
+            raise
 
     def search_deductions_by_movement(
         self,

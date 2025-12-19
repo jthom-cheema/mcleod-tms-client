@@ -247,6 +247,7 @@ The client also provides a separate function for searching deduction history (pr
 ```python
 from tms_client import TMSClient
 
+# IMPORTANT: This endpoint requires Basic Auth (username/password), not API key
 with TMSClient("username", "password") as client:
     # Search deduction history by movement ID
     history = client.search_deductions_history({
@@ -266,6 +267,8 @@ with TMSClient("username", "password") as client:
         print(f"Check Number: {deduction.get('check_number')}")
         print(f"Process Status: {deduction.get('process_status')}")
 ```
+
+**⚠️ Authentication Requirement**: The `/deductions/history` endpoint on McLeod TMS servers requires **Basic Authentication (username/password)** and does not accept API key authentication, even though `/deductions/search` works with API keys. If you initialize the client with an API key, this function will raise a clear error message explaining the requirement.
 
 **Key Differences from Pending Deductions**:
 - History deductions have been processed/paid and include payment fields (`check_date`, `check_number`, `is_void`, `process_status`)

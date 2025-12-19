@@ -270,6 +270,9 @@ for deduction in deductions:
 
 ### Deduction History
 ```python
+# ⚠️ IMPORTANT: This endpoint requires Basic Auth (username/password), not API key
+# If using API key, you'll get a 401 error with a helpful message
+
 # Search deduction history (processed/paid deductions)
 history = client.search_deductions_history({
     "drs_deduct_hist.movement_id": "1180935"
@@ -289,6 +292,8 @@ for deduction in history:
     print(f"Process Status: {deduction.get('process_status')}")
     print(f"Is Void: {deduction.get('is_void')}")
 ```
+
+**⚠️ Authentication Requirement**: The `/deductions/history` endpoint requires **Basic Authentication (username/password)** and does not accept API key authentication. This is a server-side limitation. If you use an API key, the function will raise a clear error explaining this requirement.
 
 **Key Differences from Pending Deductions**:
 - History deductions have been processed/paid and include payment fields
