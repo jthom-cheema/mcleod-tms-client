@@ -218,6 +218,54 @@ for settlement in settlements:
 
 **Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
 
+### Deductions
+```python
+# Search deductions by movement ID (convenience method)
+deductions = client.search_deductions_by_movement("1180935", company_id="TMS2")
+
+# General search with filters
+deductions = client.search_deductions({
+    "drs_pending_deduct.movement_id": "1180935"
+})
+
+# Search deductions ready to pay for loaded movements
+deductions = client.search_deductions({
+    "drs_pending_deduct.ready_to_pay_flag": "Y",
+    "movement.loaded": "L"
+})
+
+# Search with custom sorting
+deductions = client.search_deductions(
+    {"drs_pending_deduct.payee_id": "SHERTUCA"},
+    order_by="drs_pending_deduct.transaction_date+DESC"
+)
+
+# Auto-paginate to get all results
+all_deductions = client.search_deductions(
+    {"drs_pending_deduct.payee_id": "SHERTUCA"},
+    auto_paginate=True
+)
+
+# Calculate total carrier pay for a movement
+deductions = client.search_deductions_by_movement("1180935", company_id="TMS2")
+if deductions:
+    movement = deductions[0].get('movement', {})
+    base_pay = movement.get('override_pay_amt', 0)
+    total_deductions = sum(d.get('amount', 0) for d in deductions)
+    total_pay = base_pay + total_deductions
+    print(f"Base: ${base_pay}, Deductions: ${total_deductions}, Total: ${total_pay}")
+
+# Process results
+for deduction in deductions:
+    print(f"Deduction ID: {deduction.get('id')}")
+    print(f"Payee: {deduction.get('payee_id')}")
+    print(f"Amount: ${deduction.get('amount', 0)}")
+    print(f"Code: {deduction.get('deduct_code_id')}")
+    print(f"Description: {deduction.get('short_desc', 'N/A')}")
+```
+
+**Supported Filter Prefixes**: `drs_pending_deduct` (or no prefix), `movement`, `payee`
+
 ### Images & Documents
 ```python
 # Get available images for an order

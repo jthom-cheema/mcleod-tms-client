@@ -193,6 +193,51 @@ with TMSClient("username", "password") as client:
 
 **Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
 
+## Deductions Search
+
+The client provides flexible deductions search for pending carrier deductions:
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Search deductions by movement ID (convenience method)
+    deductions = client.search_deductions_by_movement("1180935", company_id="TMS2")
+    
+    # General search with filters
+    deductions = client.search_deductions({
+        "drs_pending_deduct.movement_id": "1180935"
+    })
+    
+    # Search deductions ready to pay for loaded movements
+    deductions = client.search_deductions({
+        "drs_pending_deduct.ready_to_pay_flag": "Y",
+        "movement.loaded": "L"
+    })
+    
+    # Search with custom sorting
+    deductions = client.search_deductions(
+        {"drs_pending_deduct.payee_id": "SHERTUCA"},
+        order_by="drs_pending_deduct.transaction_date+DESC"
+    )
+    
+    # Auto-paginate to get all results
+    all_deductions = client.search_deductions(
+        {"drs_pending_deduct.payee_id": "SHERTUCA"},
+        auto_paginate=True
+    )
+    
+    # Calculate total carrier pay for a movement
+    deductions = client.search_deductions_by_movement("1180935", company_id="TMS2")
+    movement = deductions[0].get('movement', {}) if deductions else {}
+    base_pay = movement.get('override_pay_amt', 0)
+    total_deductions = sum(d.get('amount', 0) for d in deductions)
+    total_pay = base_pay + total_deductions
+    print(f"Base: ${base_pay}, Deductions: ${total_deductions}, Total: ${total_pay}")
+```
+
+**Supported Filter Prefixes**: `drs_pending_deduct` (or no prefix), `movement`, `payee`
+
 ## Image Upload
 
 The client provides functionality to upload images to McLeod TMS object history:
