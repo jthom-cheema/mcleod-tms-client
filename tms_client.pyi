@@ -275,13 +275,26 @@ class TMSClient:
         """Search pending deductions using flexible table.field criteria."""
         ...
 
+    def search_deductions_history(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Search deduction history (processed/paid deductions) using flexible table.field criteria."""
+        ...
+
     def search_deductions_by_movement(
         self,
         movement_id: Union[str, int],
         company_id: Optional[str] = None,
         order_by: Optional[str] = None,
+        include_history: bool = True,
     ) -> List[Dict[str, Any]]:
-        """Search pending deductions by movement ID."""
+        """Search pending deductions by movement ID, with optional fallback to history."""
         ...
     
     # Image and document methods

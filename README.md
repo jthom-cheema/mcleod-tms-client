@@ -238,6 +238,42 @@ with TMSClient("username", "password") as client:
 
 **Supported Filter Prefixes**: `drs_pending_deduct` (or no prefix), `movement`, `payee`
 
+**Note**: The `search_deductions_by_movement()` function includes an `include_history` parameter (default: `True`) that will automatically search deduction history if no pending deductions are found. This ensures you get deductions even if they've already been processed/paid.
+
+## Deduction History Search
+
+The client also provides a separate function for searching deduction history (processed/paid deductions):
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Search deduction history by movement ID
+    history = client.search_deductions_history({
+        "drs_deduct_hist.movement_id": "1180935"
+    })
+    
+    # Search by payee and transaction date
+    history = client.search_deductions_history({
+        "drs_deduct_hist.payee_id": "SHERTUCA",
+        "drs_deduct_hist.transaction_date": ">=t-30"
+    })
+    
+    # History deductions include payment information
+    for deduction in history:
+        print(f"Amount: ${deduction.get('amount', 0)}")
+        print(f"Check Date: {deduction.get('check_date')}")
+        print(f"Check Number: {deduction.get('check_number')}")
+        print(f"Process Status: {deduction.get('process_status')}")
+```
+
+**Key Differences from Pending Deductions**:
+- History deductions have been processed/paid and include payment fields (`check_date`, `check_number`, `is_void`, `process_status`)
+- History deductions do not include nested `movement` objects
+- History uses `drs_deduct_hist` prefix instead of `drs_pending_deduct`
+
+**Supported Filter Prefixes**: `drs_deduct_hist` (or no prefix), `movement`, `payee`
+
 ## Image Upload
 
 The client provides functionality to upload images to McLeod TMS object history:

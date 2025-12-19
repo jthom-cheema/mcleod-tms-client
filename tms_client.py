@@ -1889,41 +1889,165 @@ class TMSClient:
         results = self.get_json("/deductions/search", company_id=company_id, params=params)
         return results if isinstance(results, list) else []
 
+    def search_deductions_history(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search deduction history (processed/paid deductions) using flexible table.field criteria.
+
+        This calls the ``/deductions/history`` endpoint and allows passing any
+        combination of prefixed fields supported by the API. Unlike pending deductions,
+        history deductions have been processed and include payment information like
+        check_date, check_number, and process_status.
+
+        Args:
+            filters: Mapping of query keys to values. Keys should include the
+                proper table/field prefix as required by the API
+                (for example: {"drs_deduct_hist.movement_id": "1180935"}).
+                Supported prefixes:
+                - drs_deduct_hist: Use `drs_deduct_hist` or no prefix
+                - movement: Use `movement` prefix
+                - payee: Use `payee` prefix
+            company_id: Optional override for Company ID header.
+            order_by: Optional order by expression. Multiple columns may be
+                provided as a comma-delimited string per API docs.
+                Format: prefix.field+direction, prefix.field+direction
+                Default: drs_deduct_hist.transaction_date+DESC
+            record_length: Optional page size.
+            record_offset: Optional page offset (ignored if auto_paginate is True).
+            auto_paginate: When True, automatically fetches all pages by incrementing
+                record_offset until no more results are returned.
+
+        Returns:
+            List of RowDrsDeductHist objects returned by the search.
+
+        Examples:
+            >>> # Search deduction history by movement ID
+            >>> client.search_deductions_history({"drs_deduct_hist.movement_id": "1180935"})
+            
+            >>> # Search by payee and transaction date
+            >>> client.search_deductions_history({
+            ...     "drs_deduct_hist.payee_id": "SHERTUCA",
+            ...     "drs_deduct_hist.transaction_date": ">=t-30"
+            ... })
+            
+            >>> # Search with custom sorting
+            >>> client.search_deductions_history(
+            ...     {"drs_deduct_hist.payee_id": "SHERTUCA"},
+            ...     order_by="drs_deduct_hist.transaction_date+DESC"
+            ... )
+        """
+        # Auto-pagination using offset-based pagination
+        if auto_paginate:
+            all_rows: List[Dict[str, Any]] = []
+            page_size = int(record_length) if record_length is not None else 100
+            max_pages = 1000  # Safety limit (100,000 records max)
+            offset = 0
+            
+            for page_num in range(1, max_pages + 1):
+                page_results = self.search_deductions_history(
+                    filters=filters,
+                    company_id=company_id,
+                    order_by=order_by,
+                    record_length=page_size,
+                    record_offset=offset,
+                    auto_paginate=False,  # Prevent recursion
+                )
+                
+                if not page_results or len(page_results) == 0:
+                    break
+                
+                all_rows.extend(page_results)
+                
+                # If we got fewer results than requested, we're done
+                if len(page_results) < page_size:
+                    break
+                
+                offset += page_size
+            
+            return all_rows
+        
+        # Single-page request (no auto-pagination)
+        params: Dict[str, Any] = dict(filters or {})
+
+        # Sorting and pagination
+        if order_by:
+            params["orderBy"] = order_by
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        # Note: The endpoint is /deductions/history (not /deductions/history/search)
+        results = self.get_json("/deductions/history", company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
     def search_deductions_by_movement(
         self,
         movement_id: Union[str, int],
         company_id: Optional[str] = None,
         order_by: Optional[str] = None,
+        include_history: bool = True,
     ) -> List[Dict[str, Any]]:
         """
-        Search pending deductions by movement ID.
+        Search pending deductions by movement ID, with optional fallback to history.
 
         This is a convenience method that searches for pending deductions
-        associated with a specific movement ID.
+        associated with a specific movement ID. If no pending deductions are found
+        and `include_history=True`, it will also search deduction history.
 
         Args:
             movement_id: The movement ID to search for (e.g., "1180935" or 1180935)
             company_id: Optional override for Company ID header.
             order_by: Optional order by expression.
                 Default: drs_pending_deduct.transaction_date+DESC
+            include_history: If True and no pending deductions found, also search
+                deduction history for processed/paid deductions.
 
         Returns:
-            List of RowDrsPendingDeduct objects for the specified movement.
+            List of deduction objects (RowDrsPendingDeduct or RowDrsDeductHist) for
+            the specified movement. If history is included, the list may contain
+            both pending and history deductions.
 
         Examples:
-            >>> # Get deductions for a movement
-            >>> deductions = client.search_deductions_by_movement("1180935")
+            >>> # Get deductions for a movement (pending only)
+            >>> deductions = client.search_deductions_by_movement("1180935", include_history=False)
             >>> for d in deductions:
             ...     print(f"Deduction: {d.get('id')} - ${d.get('amount', 0)}")
+            
+            >>> # Get deductions including history (fallback if no pending)
+            >>> deductions = client.search_deductions_by_movement("1180935", include_history=True)
             
             >>> # Get deductions from TMS2
             >>> deductions = client.search_deductions_by_movement(1180935, company_id="TMS2")
         """
-        return self.search_deductions(
+        # First try pending deductions
+        pending = self.search_deductions(
             filters={"drs_pending_deduct.movement_id": str(movement_id)},
             company_id=company_id,
             order_by=order_by,
         )
+        
+        # If we found pending deductions, return them
+        if pending:
+            return pending
+        
+        # If no pending and history is requested, try history
+        if include_history:
+            history = self.search_deductions_history(
+                filters={"drs_deduct_hist.movement_id": str(movement_id)},
+                company_id=company_id,
+                order_by=order_by,
+            )
+            return history
+        
+        return []
 
     def close(self) -> None:
         """Close the session."""

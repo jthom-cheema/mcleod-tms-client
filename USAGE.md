@@ -266,6 +266,37 @@ for deduction in deductions:
 
 **Supported Filter Prefixes**: `drs_pending_deduct` (or no prefix), `movement`, `payee`
 
+**Note**: The `search_deductions_by_movement()` function includes an `include_history` parameter (default: `True`) that will automatically search deduction history if no pending deductions are found.
+
+### Deduction History
+```python
+# Search deduction history (processed/paid deductions)
+history = client.search_deductions_history({
+    "drs_deduct_hist.movement_id": "1180935"
+})
+
+# Search by payee and transaction date
+history = client.search_deductions_history({
+    "drs_deduct_hist.payee_id": "SHERTUCA",
+    "drs_deduct_hist.transaction_date": ">=t-30"
+})
+
+# History deductions include payment information
+for deduction in history:
+    print(f"Amount: ${deduction.get('amount', 0)}")
+    print(f"Check Date: {deduction.get('check_date')}")
+    print(f"Check Number: {deduction.get('check_number')}")
+    print(f"Process Status: {deduction.get('process_status')}")
+    print(f"Is Void: {deduction.get('is_void')}")
+```
+
+**Key Differences from Pending Deductions**:
+- History deductions have been processed/paid and include payment fields
+- History deductions do not include nested `movement` objects
+- History uses `drs_deduct_hist` prefix instead of `drs_pending_deduct`
+
+**Supported Filter Prefixes**: `drs_deduct_hist` (or no prefix), `movement`, `payee`
+
 ### Images & Documents
 ```python
 # Get available images for an order
