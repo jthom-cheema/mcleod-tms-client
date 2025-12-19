@@ -262,6 +262,27 @@ class TMSClient:
     ) -> List[Dict[str, Any]]:
         """Get settlements that are on hold (not ready to pay)."""
         ...
+
+    def search_deductions(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Search pending deductions using flexible table.field criteria."""
+        ...
+
+    def search_deductions_by_movement(
+        self,
+        movement_id: Union[str, int],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Search pending deductions by movement ID."""
+        ...
     
     # Image and document methods
     def get_available_images(

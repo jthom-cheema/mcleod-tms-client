@@ -1785,6 +1785,146 @@ class TMSClient:
             # Re-raise with context for debugging
             raise Exception(f"Failed to add charge to order {order_id}: {e}")
 
+    def search_deductions(
+        self,
+        filters: Dict[str, Any],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search pending deductions using flexible table.field criteria.
+
+        This calls the ``/deductions/search`` endpoint and allows passing any
+        combination of prefixed fields supported by the API (e.g.,
+        ``drs_pending_deduct.movement_id``, ``drs_pending_deduct.ready_to_pay_flag``,
+        ``movement.loaded``, ``payee.id``).
+
+        Args:
+            filters: Mapping of query keys to values. Keys should include the
+                proper table/field prefix as required by the API
+                (for example: {"drs_pending_deduct.movement_id": "1180935"}).
+                Supported prefixes:
+                - drs_pending_deduct: Use `drs_pending_deduct` or no prefix
+                - movement: Use `movement` prefix
+                - payee: Use `payee` prefix
+            company_id: Optional override for Company ID header.
+            order_by: Optional order by expression. Multiple columns may be
+                provided as a comma-delimited string per API docs.
+                Format: prefix.field+direction, prefix.field+direction
+                Default: drs_pending_deduct.transaction_date+DESC
+            record_length: Optional page size.
+            record_offset: Optional page offset (ignored if auto_paginate is True).
+            auto_paginate: When True, automatically fetches all pages by incrementing
+                record_offset until no more results are returned.
+
+        Returns:
+            List of RowDrsPendingDeduct objects returned by the search.
+
+        Examples:
+            >>> # Search deductions by movement ID
+            >>> client.search_deductions({"drs_pending_deduct.movement_id": "1180935"})
+            
+            >>> # Search deductions ready to pay for loaded movements
+            >>> client.search_deductions({
+            ...     "drs_pending_deduct.ready_to_pay_flag": "Y",
+            ...     "movement.loaded": "L"
+            ... })
+            
+            >>> # Search with custom sorting
+            >>> client.search_deductions(
+            ...     {"drs_pending_deduct.payee_id": "*"},
+            ...     order_by="drs_pending_deduct.transaction_date+DESC"
+            ... )
+            
+            >>> # Search with auto-pagination to get ALL results
+            >>> all_deductions = client.search_deductions(
+            ...     {"drs_pending_deduct.payee_id": "*"},
+            ...     auto_paginate=True
+            ... )
+        """
+        # Auto-pagination using offset-based pagination
+        if auto_paginate:
+            all_rows: List[Dict[str, Any]] = []
+            page_size = int(record_length) if record_length is not None else 100
+            max_pages = 1000  # Safety limit (100,000 records max)
+            offset = 0
+            
+            for page_num in range(1, max_pages + 1):
+                page_results = self.search_deductions(
+                    filters=filters,
+                    company_id=company_id,
+                    order_by=order_by,
+                    record_length=page_size,
+                    record_offset=offset,
+                    auto_paginate=False,  # Prevent recursion
+                )
+                
+                if not page_results or len(page_results) == 0:
+                    break
+                
+                all_rows.extend(page_results)
+                
+                # If we got fewer results than requested, we're done
+                if len(page_results) < page_size:
+                    break
+                
+                offset += page_size
+            
+            return all_rows
+        
+        # Single-page request (no auto-pagination)
+        params: Dict[str, Any] = dict(filters or {})
+
+        # Sorting and pagination
+        if order_by:
+            params["orderBy"] = order_by
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        results = self.get_json("/deductions/search", company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
+    def search_deductions_by_movement(
+        self,
+        movement_id: Union[str, int],
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search pending deductions by movement ID.
+
+        This is a convenience method that searches for pending deductions
+        associated with a specific movement ID.
+
+        Args:
+            movement_id: The movement ID to search for (e.g., "1180935" or 1180935)
+            company_id: Optional override for Company ID header.
+            order_by: Optional order by expression.
+                Default: drs_pending_deduct.transaction_date+DESC
+
+        Returns:
+            List of RowDrsPendingDeduct objects for the specified movement.
+
+        Examples:
+            >>> # Get deductions for a movement
+            >>> deductions = client.search_deductions_by_movement("1180935")
+            >>> for d in deductions:
+            ...     print(f"Deduction: {d.get('id')} - ${d.get('amount', 0)}")
+            
+            >>> # Get deductions from TMS2
+            >>> deductions = client.search_deductions_by_movement(1180935, company_id="TMS2")
+        """
+        return self.search_deductions(
+            filters={"drs_pending_deduct.movement_id": str(movement_id)},
+            company_id=company_id,
+            order_by=order_by,
+        )
+
     def close(self) -> None:
         """Close the session."""
         self.session.close()
