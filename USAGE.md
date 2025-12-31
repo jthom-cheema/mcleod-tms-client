@@ -214,9 +214,26 @@ for settlement in settlements:
     print(f"Settlement ID: {settlement.get('id')}")
     print(f"Payee: {settlement.get('payee_id')}")
     print(f"Amount: ${settlement.get('amount', 0)}")
+
+# Update settlement status - put on hold
+updated = client.update_settlement_status("1130249", "N", company_id="TMS2")
+print(f"Updated {len(updated)} settlement(s) to Hold")
+
+# Mark settlements ready to process (pay)
+updated = client.update_settlement_status("1130249", "Y", company_id="TMS2")
+
+# Void settlements  
+updated = client.update_settlement_status("1130249", "V", company_id="TMS2")
 ```
 
 **Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
+
+**Status Values for `update_settlement_status()`**:
+| Value | Status | Description |
+|-------|--------|-------------|
+| `Y` | Process | Ready to pay |
+| `N` | Hold | Not ready to pay |
+| `V` | Void | Voided |
 
 ### Deductions
 ```python

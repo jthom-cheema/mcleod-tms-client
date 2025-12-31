@@ -189,9 +189,20 @@ with TMSClient("username", "password") as client:
     sorted_on_hold = client.get_settlements_on_hold(
         order_by="settlement.ok2pay_date+DESC"
     )
+    
+    # Update settlement status (put on hold)
+    updated = client.update_settlement_status("1130249", "N", company_id="TMS2")
+    
+    # Mark ready to process
+    updated = client.update_settlement_status("1130249", "Y", company_id="TMS2")
+    
+    # Void settlements
+    updated = client.update_settlement_status("1130249", "V", company_id="TMS2")
 ```
 
 **Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
+
+**Status Values**: `Y` (Process/Ready), `N` (Hold), `V` (Void)
 
 ## Deductions Search
 

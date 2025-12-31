@@ -4,6 +4,61 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2025-12-31] Settlement Status Updates
+
+### Added
+- **`update_settlement_status()`** - Update the `ready_to_pay_flag` for settlements on a movement
+
+### What It Does
+Uses `PUT /settlement/update` endpoint to change the process status of pending settlements. This is the same as changing the status in the McLeod UI settlement screen.
+
+### Usage
+```python
+# Put a movement's settlements on hold
+updated = client.update_settlement_status("1130249", "N", company_id="TMS2")
+print(f"Updated {len(updated)} settlement(s) to Hold")
+
+# Mark settlements ready to process (pay)
+updated = client.update_settlement_status("1130249", "Y", company_id="TMS2")
+
+# Void settlements
+updated = client.update_settlement_status("1130249", "V", company_id="TMS2")
+```
+
+### Valid Status Values
+| Value | Status | Description |
+|-------|--------|-------------|
+| `Y` | Process | Ready to pay |
+| `N` | Hold | Not ready to pay |
+| `V` | Void | Voided |
+
+### How It Works
+1. Searches for settlements using `movement.id` filter
+2. For each settlement found, sends minimal PUT payload:
+   ```json
+   {"__type": "settlement", "id": "...", "ready_to_pay_flag": "N"}
+   ```
+3. Returns list of updated settlement objects
+
+### Key Implementation Notes
+- **Filter**: Use `movement.id` (not `settlement.movement_id`) when searching settlements
+- **Minimal Payload**: Only `__type`, `id`, and changed field needed - no need for full object
+- **Auth**: Works with API key or Basic auth
+- **Returns**: Full updated settlement object from API
+
+### Files Changed
+- `tms_client.py` - Added `update_settlement_status()` function
+- `tms_client.pyi` - Added type stub
+- `README.md` - Added documentation
+- `USAGE.md` - Added examples
+- `examples.py` - Added example function
+
+### Related Functions
+- `search_settlements()` - Find settlements by filters
+- `get_settlements_on_hold()` - Get settlements with `ready_to_pay_flag="N"`
+
+---
+
 ## [2025-12-19] Settlement History & Payment Confirmation
 
 ### Added
@@ -131,6 +186,7 @@ else:
 | Function | Endpoint | Auth |
 |----------|----------|------|
 | `search_settlements()` | `/settlements/search` | Basic or API Key |
+| `update_settlement_status()` | `/settlement/update` | Basic or API Key |
 | `search_settlement_history()` | `/settlements/history/search` | Basic or API Key |
 | `is_movement_paid()` | `/settlements/history/search` | Basic or API Key |
 | `search_deductions()` | `/deductions/search` | Basic or API Key |

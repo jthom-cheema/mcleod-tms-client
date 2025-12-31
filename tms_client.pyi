@@ -263,6 +263,15 @@ class TMSClient:
         """Get settlements that are on hold (not ready to pay)."""
         ...
 
+    def update_settlement_status(
+        self,
+        movement_id: Union[str, int],
+        status: str,
+        company_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Update ready_to_pay_flag for all settlements on a movement. Status: Y=Process, N=Hold, V=Void."""
+        ...
+
     def search_deductions(
         self,
         filters: Dict[str, Any],

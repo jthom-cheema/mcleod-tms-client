@@ -1275,6 +1275,53 @@ def example_settlement_search():
                     print(f"  {key}: {type(value).__name__}")
 
 
+def example_update_settlement_status():
+    """Update settlement process status (ready_to_pay_flag).
+    
+    Uses PUT /settlement/update endpoint to change status:
+    - Y = Process (ready to pay)
+    - N = Hold (not ready to pay)
+    - V = Void
+    """
+    # Works with username/password or API key
+    with TMSClient("username", "password") as client:
+        movement_id = "1130249"
+        company = "TMS2"
+        
+        # Check current status
+        print("=== Current Settlement Status ===")
+        settlements = client.search_settlements(
+            {"movement.id": movement_id}, 
+            company_id=company
+        )
+        if settlements:
+            print(f"Movement {movement_id}: ready_to_pay_flag = {settlements[0].get('ready_to_pay_flag')}")
+        
+        # Put settlement on hold
+        print("\n=== Putting Settlement On Hold ===")
+        updated = client.update_settlement_status(movement_id, "N", company_id=company)
+        print(f"Updated {len(updated)} settlement(s) to Hold (N)")
+        
+        # Mark ready to process
+        print("\n=== Marking Ready to Process ===")
+        updated = client.update_settlement_status(movement_id, "Y", company_id=company)
+        print(f"Updated {len(updated)} settlement(s) to Process (Y)")
+        
+        # Void example (commented out - destructive action)
+        # updated = client.update_settlement_status(movement_id, "V", company_id=company)
+        # print(f"Voided {len(updated)} settlement(s)")
+        
+        # Batch update example - put multiple movements on hold
+        print("\n=== Batch Update Example ===")
+        movement_ids = ["1130249", "1130250", "1130251"]
+        for mid in movement_ids:
+            try:
+                updated = client.update_settlement_status(mid, "N", company_id=company)
+                print(f"✅ Movement {mid}: {len(updated)} settlement(s) put on hold")
+            except Exception as e:
+                print(f"❌ Movement {mid}: {e}")
+
+
 def example_authentication_methods():
     """Different ways to authenticate with the TMS client."""
     # Method 1: Username and password (positional)

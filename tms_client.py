@@ -1084,6 +1084,88 @@ class TMSClient:
             auto_paginate=auto_paginate,
         )
 
+    def update_settlement_status(
+        self,
+        movement_id: Union[str, int],
+        status: str,
+        company_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Update the ready_to_pay_flag (process status) for all settlements on a movement.
+        
+        Finds all settlements for the given movement_id and updates their
+        ready_to_pay_flag to the specified status using PUT /settlement/update.
+        
+        Args:
+            movement_id: The movement ID to find settlements for
+            status: New status for ready_to_pay_flag. Valid values:
+                - "Y" - Process (ready to pay)
+                - "N" - Hold (not ready to pay)  
+                - "V" - Void
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            List of updated settlement objects from the API
+            
+        Raises:
+            ValueError: If status is not Y, N, or V
+            Exception: If no settlements found or update fails
+            
+        Examples:
+            >>> # Put a movement's settlements on hold
+            >>> updated = client.update_settlement_status("1258474", "N")
+            >>> print(f"Updated {len(updated)} settlements to Hold")
+            
+            >>> # Mark settlements ready to process
+            >>> updated = client.update_settlement_status("1258474", "Y")
+            
+            >>> # Void settlements
+            >>> updated = client.update_settlement_status("1258474", "V")
+            
+            >>> # Update in different company
+            >>> updated = client.update_settlement_status("1258474", "N", company_id="TMS2")
+        """
+        # Validate status
+        status = status.upper()
+        if status not in ("Y", "N", "V"):
+            raise ValueError(f"Invalid status '{status}'. Must be 'Y' (Process), 'N' (Hold), or 'V' (Void)")
+        
+        movement_id_str = str(movement_id)
+        
+        # Find all settlements for this movement
+        settlements = self.search_settlements(
+            {"movement.id": movement_id_str},
+            company_id=company_id,
+        )
+        
+        if not settlements:
+            raise Exception(f"No settlements found for movement_id {movement_id_str}")
+        
+        updated_settlements = []
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        for settlement in settlements:
+            # Use minimal payload - just id and the field to change
+            payload = {
+                "__type": "settlement",
+                "id": settlement.get("id"),
+                "ready_to_pay_flag": status
+            }
+            
+            # PUT to /settlement/update
+            response = self.put(
+                "/settlement/update",
+                json=payload,
+                headers=headers,
+                company_id=company_id
+            )
+            updated_settlements.append(response.json())
+        
+        return updated_settlements
+
     def search_misc_billing_history(
         self,
         bill_date_after: Union[str, datetime],
