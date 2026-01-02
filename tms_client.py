@@ -1801,6 +1801,47 @@ class TMSClient:
         """
         return self.create_comment(RowTypes.SETTLEMENT, settlement_id, comment_type_id, comments, company_id=company_id)
     
+    def delete_comment(self, comment_id: Union[str, int], company_id: Optional[str] = None) -> bool:
+        """
+        Delete a comment by its ID.
+        
+        Deletes a comment record using the DELETE /comments/{id} endpoint.
+        
+        Args:
+            comment_id: The ID of the comment to delete
+            company_id: Optional override for Company ID header
+        
+        Returns:
+            True if deletion was successful, False otherwise
+        
+        Examples:
+            >>> # Delete a comment
+            >>> success = client.delete_comment("zz1jdvsrs3i0icoAATSAPP", company_id="TMS2")
+            >>> if success:
+            ...     print("Comment deleted successfully")
+            
+            >>> # Get comments first, then delete one
+            >>> comments = client.get_settlement_comments("zz1j0agbbp50rfkCFAATS2", company_id="TMS2")
+            >>> if comments:
+            ...     client.delete_comment(comments[0]['id'], company_id="TMS2")
+        """
+        comment_id_str = str(comment_id)
+        endpoint = f"/comments/{comment_id_str}"
+        
+        # Set Accept header to text/plain as per API docs
+        headers = {
+            "Accept": "text/plain"
+        }
+        
+        try:
+            response = self.delete(endpoint, company_id=company_id, headers=headers)
+            # DELETE typically returns 200 or 204 on success
+            # Response is text/plain according to docs
+            return response.status_code in (200, 204)
+        except Exception as e:
+            # If we get an exception, deletion likely failed
+            raise Exception(f"Failed to delete comment {comment_id_str}: {e}")
+    
     def get_available_charge_codes(self, use_cache: bool = True, cache_hours: int = 24, 
                                   company_id: Optional[str] = None) -> List[Dict]:
         """

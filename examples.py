@@ -1374,8 +1374,64 @@ def example_get_comments():
                 print(f"  User Email: {user.get('email_address')}")
             if 'commentTypeDescr' in comment:
                 ct = comment['commentTypeDescr']
-                print(f"  Comment Type: {ct.get('descr')}")
-                print(f"  Type Active: {ct.get('is_active')}")
+            print(f"  Comment Type: {ct.get('descr')}")
+            print(f"  Type Active: {ct.get('is_active')}")
+
+
+def example_delete_comments():
+    """Delete comments for various record types.
+    
+    Comments can be deleted by their ID. Useful for cleaning up test comments
+    or removing incorrect entries.
+    """
+    with TMSClient("username", "password") as client:
+        # Delete a comment by ID
+        print("=== Deleting Comment by ID ===")
+        comment_id = "zz1je0gung90o24CFAATS2"
+        try:
+            success = client.delete_comment(comment_id, company_id="TMS2")
+            if success:
+                print(f"✓ Comment {comment_id} deleted successfully")
+            else:
+                print(f"⚠ Delete returned False")
+        except Exception as e:
+            print(f"❌ Error: {e}")
+        
+        # Get comments first, then delete one
+        print("\n=== Find and Delete Specific Comment ===")
+        settlement_id = "zz1jbl5m6vq11soCFAATS3"
+        comments = client.get_settlement_comments(settlement_id, company_id="TMS2")
+        print(f"Found {len(comments)} comment(s)")
+        
+        # Find and delete a specific comment
+        target_text = "test comment"
+        target_type = "ACCESSOR"
+        for comment in comments:
+            if (comment.get('comments', '').strip() == target_text and 
+                comment.get('comment_type_id', '').strip().upper() == target_type.upper()):
+                print(f"\nFound target comment:")
+                print(f"  ID: {comment.get('id')}")
+                print(f"  Type: {comment.get('comment_type_id')}")
+                print(f"  Text: {comment.get('comments')}")
+                
+                try:
+                    success = client.delete_comment(comment['id'], company_id="TMS2")
+                    if success:
+                        print(f"✓ Comment deleted successfully")
+                    else:
+                        print(f"⚠ Delete returned False")
+                except Exception as e:
+                    print(f"❌ Error deleting: {e}")
+                break
+        else:
+            print(f"⚠ Comment not found: type='{target_type}', text='{target_text}'")
+        
+        # Verify deletion
+        print("\n=== Verifying Deletion ===")
+        remaining = client.get_settlement_comments(settlement_id, company_id="TMS2")
+        print(f"Remaining comments: {len(remaining)}")
+        for i, comment in enumerate(remaining, 1):
+            print(f"  {i}. [{comment.get('comment_type_id')}] {comment.get('comments', 'N/A')[:50]}")
 
 
 def example_create_comments():

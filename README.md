@@ -393,6 +393,28 @@ with TMSClient("username", "password") as client:
 
 **Note**: The `create_comment()` methods use a minimal payload with only required fields. The API automatically populates `entered_date`, `entered_user_id`, and nested objects like `commentTypeDescr` and `enteredByUser`.
 
+**Deleting Comments**:
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Delete a comment by ID
+    success = client.delete_comment("zz1je0gung90o24CFAATS2", company_id="TMS2")
+    if success:
+        print("Comment deleted successfully")
+    
+    # Get comments first, then delete one
+    comments = client.get_settlement_comments("zz1jbl5m6vq11soCFAATS3", company_id="TMS2")
+    if comments:
+        # Find and delete a specific comment
+        for comment in comments:
+            if comment.get('comments') == "test comment":
+                client.delete_comment(comment['id'], company_id="TMS2")
+                break
+```
+
+**Note**: The `delete_comment()` method requires the `Accept: text/plain` header as specified in the API documentation.
+
 ## Image Upload
 
 The client provides functionality to upload images to McLeod TMS object history:

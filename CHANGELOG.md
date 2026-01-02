@@ -13,12 +13,15 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 - **`create_comment()`** - Create a new comment for any parent row type
 - **`create_driver_comment()`** - Convenience method to create a comment for a driver
 - **`create_settlement_comment()`** - Convenience method to create a comment for a settlement
+- **`delete_comment()`** - Delete a comment by its ID
 - **`RowTypes.SETTLEMENT`** - Constant for settlement row type ("M")
 
 ### What It Does
 **Retrieval**: Retrieves comments associated with various record types using the `GET /comments/{parentRowType}/{parentRowId}` endpoint. Comments include details about who entered them, when they were entered, comment type descriptions, and full user information for the person who created the comment.
 
 **Creation**: Creates new comment records using the `PUT /comments/create` endpoint. Uses minimal payload with only required fields (`__type`, `parent_row_type`, `parent_row_id`, `comment_type_id`, `comments`). The API automatically populates other fields like `entered_date`, `entered_user_id`, and nested objects.
+
+**Deletion**: Deletes comment records using the `DELETE /comments/{id}` endpoint. Requires `Accept: text/plain` header as specified in API documentation. Returns `True` on successful deletion (200/204 status codes).
 
 ### Usage
 ```python
@@ -55,6 +58,16 @@ with TMSClient("username", "password") as client:
         "test comment",
         company_id="TMS2"
     )
+    
+    # Delete comments
+    success = client.delete_comment("zz1je0gung90o24CFAATS2", company_id="TMS2")
+    if success:
+        print("Comment deleted successfully")
+    
+    # Get comments first, then delete one
+    comments = client.get_settlement_comments("zz1jbl5m6vq11soCFAATS3", company_id="TMS2")
+    if comments:
+        client.delete_comment(comments[0]['id'], company_id="TMS2")
 ```
 
 ### Known Parent Row Types
@@ -71,13 +84,18 @@ Each comment includes:
 - **`enteredByUser`**: Nested user object with full user details (`id`, `name`, `email_address`, etc.)
 
 ### Files Changed
-- `tms_client.py` - Added `get_comments()`, `get_driver_comments()`, `get_settlement_comments()`, `create_comment()`, `create_driver_comment()`, `create_settlement_comment()` methods
+- `tms_client.py` - Added `get_comments()`, `get_driver_comments()`, `get_settlement_comments()`, `create_comment()`, `create_driver_comment()`, `create_settlement_comment()`, `delete_comment()` methods
 - `tms_client.pyi` - Added type stubs
 - `RowTypes` class - Added `SETTLEMENT` constant
 - `README.md` - Added documentation section
 - `USAGE.md` - Added usage examples
 - `examples.py` - Added example functions
 - `tests/test_get_comments.py` - Added test file
+
+### Key Implementation Notes
+- **Delete Endpoint**: Requires `Accept: text/plain` header (different from other endpoints that use `application/json`)
+- **Delete Response**: Returns `text/plain` response indicating success or failure
+- **Delete Status Codes**: Returns `True` for 200 or 204 status codes
 
 ### Related Functions
 - `RowTypes` constants - Use for consistent row type values

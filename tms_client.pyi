@@ -443,6 +443,14 @@ class TMSClient:
         """Convenience method to create a comment for a settlement."""
         ...
     
+    def delete_comment(
+        self, 
+        comment_id: Union[str, int], 
+        company_id: Optional[str] = None
+    ) -> bool:
+        """Delete a comment by its ID."""
+        ...
+    
     def get_available_charge_codes(
         self, 
         use_cache: bool = True, 

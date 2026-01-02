@@ -416,6 +416,25 @@ print(f"Created comment ID: {comment['id']}")
 
 **Note**: The create methods use minimal payloads. The API automatically populates `entered_date`, `entered_user_id`, and nested objects.
 
+**Deleting Comments**:
+```python
+# Delete a comment by ID
+success = client.delete_comment("zz1je0gung90o24CFAATS2", company_id="TMS2")
+if success:
+    print("Comment deleted successfully")
+
+# Get comments first, then delete one
+comments = client.get_settlement_comments("zz1jbl5m6vq11soCFAATS3", company_id="TMS2")
+if comments:
+    # Find and delete a specific comment
+    for comment in comments:
+        if comment.get('comment_type_id') == "ACCESSOR" and comment.get('comments') == "test comment":
+            client.delete_comment(comment['id'], company_id="TMS2")
+            break
+```
+
+**Note**: The `delete_comment()` method requires the `Accept: text/plain` header as specified in the API documentation.
+
 ### Images & Documents
 ```python
 # Get available images for an order
