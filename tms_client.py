@@ -17,6 +17,7 @@ class RowTypes:
     """Constants for TMS row types used in various API endpoints."""
     ORDER = "O"           # Order
     MOVEMENT = "M"        # Movement
+    SETTLEMENT = "M"      # Settlement (same as Movement)
     CUSTOMER = "C"        # Customer
     LOCATION = "L"        # Location
     PAYEE = "P"          # Payee
@@ -1619,6 +1620,186 @@ class TMSClient:
             self._doctype_cache[cache_key] = doctypes
             
         return doctypes
+    
+    def get_comments(self, parent_row_type: str, parent_row_id: Union[str, int], 
+                     company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Retrieve comments for a given parent row type and row ID.
+        
+        Retrieves a list of comments associated with a specific record (driver, settlement, etc.).
+        The endpoint supports various parent row types such as Driver (D) and Settlement (M).
+        
+        Args:
+            parent_row_type: The comment record's parent row type. Use RowTypes constants:
+                - RowTypes.DRIVER for drivers (D)
+                - RowTypes.SETTLEMENT for settlements (M)
+                - Other row types as needed
+            parent_row_id: The comment record's parent row ID (e.g., driver ID, settlement ID)
+            company_id: Optional override for Company ID header (defaults to TMS or TMS2 based on env/config)
+        
+        Returns:
+            List of RowComments objects. Each comment includes:
+            - Basic comment fields (id, comments, entered_date, entered_user_id, etc.)
+            - commentTypeDescr: Description of the comment type
+            - enteredByUser: User details for the user who entered the comment
+        
+        Examples:
+            >>> # Get comments for a driver
+            >>> driver_comments = client.get_comments(RowTypes.DRIVER, "BJM01")
+            >>> for comment in driver_comments:
+            ...     print(f"{comment['enteredByUser']['name']}: {comment['comments']}")
+            
+            >>> # Get comments for a settlement
+            >>> settlement_comments = client.get_comments(RowTypes.SETTLEMENT, "zz1ivr5ucal12v8CFAATS3", company_id="TMS2")
+            >>> for comment in settlement_comments:
+            ...     print(f"{comment['commentTypeDescr']['descr']}: {comment['comments']}")
+        """
+        parent_row_id_str = str(parent_row_id)
+        endpoint = f"/comments/{parent_row_type}/{parent_row_id_str}"
+        results = self.get_json(endpoint, company_id=company_id)
+        return results if isinstance(results, list) else []
+    
+    def get_driver_comments(self, driver_id: Union[str, int], company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Convenience method to get comments for a driver.
+        
+        Args:
+            driver_id: The driver ID
+            company_id: Optional override for Company ID header
+        
+        Returns:
+            List of RowComments objects for the specified driver
+        
+        Examples:
+            >>> driver_comments = client.get_driver_comments("BJM01")
+            >>> settlement_comments = client.get_driver_comments("BJM01", company_id="TMS2")
+        """
+        return self.get_comments(RowTypes.DRIVER, driver_id, company_id=company_id)
+    
+    def get_settlement_comments(self, settlement_id: Union[str, int], company_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Convenience method to get comments for a settlement.
+        
+        Args:
+            settlement_id: The settlement ID
+            company_id: Optional override for Company ID header
+        
+        Returns:
+            List of RowComments objects for the specified settlement
+        
+        Examples:
+            >>> settlement_comments = client.get_settlement_comments("zz1ivr5ucal12v8CFAATS3", company_id="TMS2")
+        """
+        return self.get_comments(RowTypes.SETTLEMENT, settlement_id, company_id=company_id)
+    
+    def create_comment(self, parent_row_type: str, parent_row_id: Union[str, int], 
+                      comment_type_id: str, comments: str, company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a new comment for a given parent row type and row ID.
+        
+        Creates a comment record using the PUT /comments/create endpoint. The payload
+        is kept minimal with only the required fields.
+        
+        Args:
+            parent_row_type: The parent row type. Use RowTypes constants:
+                - RowTypes.DRIVER for drivers (D)
+                - RowTypes.SETTLEMENT for settlements (M)
+                - Other row types as needed
+            parent_row_id: The parent row ID (e.g., driver ID, settlement ID)
+            comment_type_id: The comment type ID (e.g., "AP" for AP NOTES)
+            comments: The comment text to create
+            company_id: Optional override for Company ID header
+        
+        Returns:
+            The created RowComments object from the API response
+        
+        Examples:
+            >>> # Create a settlement comment
+            >>> comment = client.create_comment(
+            ...     RowTypes.SETTLEMENT, 
+            ...     "zz1ivr5ucal12v8CFAATS3",
+            ...     "AP",
+            ...     "Payment processed successfully",
+            ...     company_id="TMS2"
+            ... )
+            >>> print(f"Created comment ID: {comment['id']}")
+            
+            >>> # Create a driver comment
+            >>> comment = client.create_comment(
+            ...     RowTypes.DRIVER,
+            ...     "BJM01",
+            ...     "GEN",
+            ...     "Driver called in sick"
+            ... )
+        """
+        parent_row_id_str = str(parent_row_id)
+        
+        # Minimal payload - only required fields
+        payload = {
+            "__type": "comments",
+            "parent_row_type": parent_row_type,
+            "parent_row_id": parent_row_id_str,
+            "comment_type_id": comment_type_id,
+            "comments": comments
+        }
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        response = self.put(
+            "/comments/create",
+            json=payload,
+            headers=headers,
+            company_id=company_id
+        )
+        return response.json()
+    
+    def create_driver_comment(self, driver_id: Union[str, int], comment_type_id: str, 
+                              comments: str, company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Convenience method to create a comment for a driver.
+        
+        Args:
+            driver_id: The driver ID
+            comment_type_id: The comment type ID (e.g., "AP", "GEN")
+            comments: The comment text to create
+            company_id: Optional override for Company ID header
+        
+        Returns:
+            The created RowComments object
+        
+        Examples:
+            >>> comment = client.create_driver_comment("BJM01", "GEN", "Driver called in sick")
+            >>> print(f"Created comment: {comment['id']}")
+        """
+        return self.create_comment(RowTypes.DRIVER, driver_id, comment_type_id, comments, company_id=company_id)
+    
+    def create_settlement_comment(self, settlement_id: Union[str, int], comment_type_id: str,
+                                  comments: str, company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Convenience method to create a comment for a settlement.
+        
+        Args:
+            settlement_id: The settlement ID
+            comment_type_id: The comment type ID (e.g., "AP", "GEN")
+            comments: The comment text to create
+            company_id: Optional override for Company ID header
+        
+        Returns:
+            The created RowComments object
+        
+        Examples:
+            >>> comment = client.create_settlement_comment(
+            ...     "zz1ivr5ucal12v8CFAATS3",
+            ...     "AP",
+            ...     "Payment processed successfully",
+            ...     company_id="TMS2"
+            ... )
+            >>> print(f"Created comment: {comment['id']}")
+        """
+        return self.create_comment(RowTypes.SETTLEMENT, settlement_id, comment_type_id, comments, company_id=company_id)
     
     def get_available_charge_codes(self, use_cache: bool = True, cache_hours: int = 24, 
                                   company_id: Optional[str] = None) -> List[Dict]:

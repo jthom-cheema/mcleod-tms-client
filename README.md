@@ -336,6 +336,63 @@ with TMSClient("username", "password") as client:
 
 **Supported Filter Prefixes**: `drs_settle_hist` (or no prefix), `movement`, `payee`
 
+## Comments
+
+The client provides functionality to retrieve comments for various record types:
+
+```python
+from tms_client import TMSClient, RowTypes
+
+with TMSClient("username", "password") as client:
+    # Generic method - works for any row type
+    comments = client.get_comments(RowTypes.DRIVER, "BJM01")
+    comments = client.get_comments(RowTypes.SETTLEMENT, "zz1ivr5ucal12v8CFAATS3", company_id="TMS2")
+    
+    # Convenience methods
+    driver_comments = client.get_driver_comments("BJM01")
+    settlement_comments = client.get_settlement_comments("zz1ivr5ucal12v8CFAATS3", company_id="TMS2")
+    
+    # Process comments
+    for comment in comments:
+        print(f"{comment['enteredByUser']['name']}: {comment['comments']}")
+        print(f"Type: {comment['commentTypeDescr']['descr']}")
+        print(f"Date: {comment['entered_date']}")
+```
+
+**Known Parent Row Types**:
+- `RowTypes.DRIVER` ("D") - Driver comments
+- `RowTypes.SETTLEMENT` ("M") - Settlement/Movement comments
+
+**Response Structure**: Each comment includes basic fields (`id`, `comments`, `entered_date`, etc.), `commentTypeDescr` (comment type details), and `enteredByUser` (full user details).
+
+**Creating Comments**:
+```python
+from tms_client import TMSClient, RowTypes
+
+with TMSClient("username", "password") as client:
+    # Generic method - works for any row type
+    comment = client.create_comment(
+        RowTypes.SETTLEMENT,
+        "zz1ivr5ucal12v8CFAATS3",
+        "AP",
+        "Payment processed successfully",
+        company_id="TMS2"
+    )
+    
+    # Convenience methods
+    driver_comment = client.create_driver_comment("BJM01", "GEN", "Driver called in sick")
+    settlement_comment = client.create_settlement_comment(
+        "zz1j0agbbp50rfkCFAATS2",
+        "AP",
+        "test comment",
+        company_id="TMS2"
+    )
+    
+    print(f"Created comment ID: {comment['id']}")
+```
+
+**Note**: The `create_comment()` methods use a minimal payload with only required fields. The API automatically populates `entered_date`, `entered_user_id`, and nested objects like `commentTypeDescr` and `enteredByUser`.
+
 ## Image Upload
 
 The client provides functionality to upload images to McLeod TMS object history:

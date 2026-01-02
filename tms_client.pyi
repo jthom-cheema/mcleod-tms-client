@@ -8,6 +8,7 @@ class RowTypes:
     """Constants for TMS row types used in various API endpoints."""
     ORDER: str
     MOVEMENT: str
+    SETTLEMENT: str
     CUSTOMER: str
     LOCATION: str
     PAYEE: str
@@ -384,6 +385,62 @@ class TMSClient:
         use_cache: bool = True
     ) -> Dict[str, Any]:
         """Get available document types for a specific record type and ID."""
+        ...
+    
+    def get_comments(
+        self, 
+        parent_row_type: str, 
+        parent_row_id: Union[str, int], 
+        company_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Retrieve comments for a given parent row type and row ID."""
+        ...
+    
+    def get_driver_comments(
+        self, 
+        driver_id: Union[str, int], 
+        company_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Convenience method to get comments for a driver."""
+        ...
+    
+    def get_settlement_comments(
+        self, 
+        settlement_id: Union[str, int], 
+        company_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Convenience method to get comments for a settlement."""
+        ...
+    
+    def create_comment(
+        self, 
+        parent_row_type: str, 
+        parent_row_id: Union[str, int], 
+        comment_type_id: str,
+        comments: str,
+        company_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Create a new comment for a given parent row type and row ID."""
+        ...
+    
+    def create_driver_comment(
+        self, 
+        driver_id: Union[str, int], 
+        comment_type_id: str,
+        comments: str,
+        company_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Convenience method to create a comment for a driver."""
+        ...
+    
+    def create_settlement_comment(
+        self, 
+        settlement_id: Union[str, int], 
+        comment_type_id: str,
+        comments: str,
+        company_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Convenience method to create a comment for a settlement."""
         ...
     
     def get_available_charge_codes(

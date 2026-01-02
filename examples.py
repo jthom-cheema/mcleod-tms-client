@@ -1322,6 +1322,121 @@ def example_update_settlement_status():
                 print(f"❌ Movement {mid}: {e}")
 
 
+def example_get_comments():
+    """Retrieve comments for various record types.
+    
+    Comments can be retrieved for drivers, settlements, and other record types.
+    Each comment includes details about who entered it, when, and the comment type.
+    """
+    with TMSClient("username", "password") as client:
+        # Get driver comments using convenience method
+        print("=== Driver Comments ===")
+        driver_comments = client.get_driver_comments("BJM01")
+        print(f"Found {len(driver_comments)} comment(s) for driver BJM01")
+        for comment in driver_comments:
+            user = comment.get('enteredByUser', {})
+            comment_type = comment.get('commentTypeDescr', {})
+            print(f"  {user.get('name', 'Unknown')} ({comment.get('entered_date', 'N/A')})")
+            print(f"  Type: {comment_type.get('descr', 'N/A')}")
+            print(f"  Comment: {comment.get('comments', 'N/A')}")
+            print()
+        
+        # Get settlement comments using convenience method
+        print("=== Settlement Comments ===")
+        settlement_id = "zz1ivr5ucal12v8CFAATS3"
+        settlement_comments = client.get_settlement_comments(settlement_id, company_id="TMS2")
+        print(f"Found {len(settlement_comments)} comment(s) for settlement {settlement_id}")
+        for comment in settlement_comments:
+            user = comment.get('enteredByUser', {})
+            comment_type = comment.get('commentTypeDescr', {})
+            print(f"  {user.get('name', 'Unknown')} ({comment.get('entered_date', 'N/A')})")
+            print(f"  Type: {comment_type.get('descr', 'N/A')}")
+            print(f"  Comment: {comment.get('comments', 'N/A')[:100]}...")  # Truncate long comments
+            print()
+        
+        # Generic method - works for any row type
+        print("=== Generic Comment Retrieval ===")
+        from tms_client import RowTypes
+        comments = client.get_comments(RowTypes.DRIVER, "BJM01")
+        print(f"Found {len(comments)} comment(s) using generic method")
+        
+        # Process comment details
+        if comments:
+            comment = comments[0]
+            print(f"\nComment Details:")
+            print(f"  ID: {comment.get('id')}")
+            print(f"  Type ID: {comment.get('comment_type_id')}")
+            print(f"  Entered Date: {comment.get('entered_date')}")
+            print(f"  Entered By: {comment.get('entered_user_id')}")
+            if 'enteredByUser' in comment:
+                user = comment['enteredByUser']
+                print(f"  User Name: {user.get('name')}")
+                print(f"  User Email: {user.get('email_address')}")
+            if 'commentTypeDescr' in comment:
+                ct = comment['commentTypeDescr']
+                print(f"  Comment Type: {ct.get('descr')}")
+                print(f"  Type Active: {ct.get('is_active')}")
+
+
+def example_create_comments():
+    """Create comments for various record types.
+    
+    Comments can be created for drivers, settlements, and other record types.
+    Uses minimal payload - only required fields. API populates other fields automatically.
+    """
+    with TMSClient("username", "password") as client:
+        # Create a settlement comment
+        print("=== Creating Settlement Comment ===")
+        settlement_id = "zz1j0agbbp50rfkCFAATS2"
+        comment = client.create_settlement_comment(
+            settlement_id=settlement_id,
+            comment_type_id="AP",
+            comments="Payment processed successfully",
+            company_id="TMS2"
+        )
+        print(f"✓ Created comment ID: {comment.get('id')}")
+        print(f"  Comment Type: {comment.get('comment_type_id')}")
+        print(f"  Comment Text: {comment.get('comments')}")
+        print(f"  Entered By: {comment.get('enteredByUser', {}).get('name', 'N/A')}")
+        print(f"  Entered Date: {comment.get('entered_date', 'N/A')}")
+        
+        # Create a driver comment
+        print("\n=== Creating Driver Comment ===")
+        try:
+            driver_comment = client.create_driver_comment(
+                driver_id="BJM01",
+                comment_type_id="GEN",
+                comments="Driver called in sick"
+            )
+            print(f"✓ Created comment ID: {driver_comment.get('id')}")
+            print(f"  Comment Text: {driver_comment.get('comments')}")
+        except Exception as e:
+            print(f"⚠ Could not create driver comment (driver may not exist): {e}")
+        
+        # Generic method - works for any row type
+        print("\n=== Using Generic create_comment() Method ===")
+        from tms_client import RowTypes
+        comment = client.create_comment(
+            parent_row_type=RowTypes.SETTLEMENT,
+            parent_row_id=settlement_id,
+            comment_type_id="AP",
+            comments="Generic method test comment",
+            company_id="TMS2"
+        )
+        print(f"✓ Created comment ID: {comment.get('id')}")
+        
+        # Verify by retrieving comments
+        print("\n=== Verifying Created Comments ===")
+        all_comments = client.get_settlement_comments(settlement_id, company_id="TMS2")
+        print(f"✓ Found {len(all_comments)} total comment(s) for settlement {settlement_id}")
+        for i, c in enumerate(all_comments[-3:], 1):  # Show last 3 comments
+            print(f"\n  Comment {i}:")
+            print(f"    ID: {c.get('id')}")
+            print(f"    Type: {c.get('comment_type_id')}")
+            print(f"    Text: {c.get('comments', 'N/A')[:50]}...")
+            print(f"    Entered By: {c.get('enteredByUser', {}).get('name', 'N/A')}")
+
+
 def example_authentication_methods():
     """Different ways to authenticate with the TMS client."""
     # Method 1: Username and password (positional)

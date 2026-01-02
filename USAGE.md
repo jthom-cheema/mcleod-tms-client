@@ -362,6 +362,60 @@ for record in history:
 
 **Supported Filter Prefixes**: `drs_settle_hist` (or no prefix), `movement`, `payee`
 
+### Comments
+```python
+from tms_client import TMSClient, RowTypes
+
+# Get comments for a driver
+driver_comments = client.get_driver_comments("BJM01")
+
+# Get comments for a settlement
+settlement_comments = client.get_settlement_comments("zz1ivr5ucal12v8CFAATS3", company_id="TMS2")
+
+# Generic method - works for any row type
+comments = client.get_comments(RowTypes.DRIVER, "BJM01")
+comments = client.get_comments(RowTypes.SETTLEMENT, "zz1ivr5ucal12v8CFAATS3", company_id="TMS2")
+
+# Process comments
+for comment in comments:
+    print(f"User: {comment['enteredByUser']['name']}")
+    print(f"Comment: {comment['comments']}")
+    print(f"Type: {comment['commentTypeDescr']['descr']}")
+    print(f"Date: {comment['entered_date']}")
+    print("---")
+```
+
+**Known Parent Row Types**: `RowTypes.DRIVER` ("D"), `RowTypes.SETTLEMENT` ("M")
+
+**Response Fields**: Each comment includes `id`, `comments`, `entered_date`, `entered_user_id`, `comment_type_id`, `commentTypeDescr` (nested), and `enteredByUser` (nested user object).
+
+**Creating Comments**:
+```python
+# Create a settlement comment
+comment = client.create_settlement_comment(
+    "zz1j0agbbp50rfkCFAATS2",
+    "AP",
+    "Payment processed successfully",
+    company_id="TMS2"
+)
+
+# Create a driver comment
+comment = client.create_driver_comment("BJM01", "GEN", "Driver called in sick")
+
+# Generic method - works for any row type
+comment = client.create_comment(
+    RowTypes.SETTLEMENT,
+    "zz1ivr5ucal12v8CFAATS3",
+    "AP",
+    "test comment",
+    company_id="TMS2"
+)
+
+print(f"Created comment ID: {comment['id']}")
+```
+
+**Note**: The create methods use minimal payloads. The API automatically populates `entered_date`, `entered_user_id`, and nested objects.
+
 ### Images & Documents
 ```python
 # Get available images for an order
@@ -499,7 +553,8 @@ Use the `RowTypes` class for consistent row type values:
 
 ```python
 RowTypes.ORDER      # "O" - Order
-RowTypes.MOVEMENT   # "M" - Movement  
+RowTypes.MOVEMENT   # "M" - Movement
+RowTypes.SETTLEMENT # "M" - Settlement (same as Movement)
 RowTypes.CUSTOMER   # "C" - Customer
 RowTypes.LOCATION   # "L" - Location
 RowTypes.PAYEE      # "P" - Payee
