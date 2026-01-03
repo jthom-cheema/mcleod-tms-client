@@ -1085,20 +1085,19 @@ class TMSClient:
             auto_paginate=auto_paginate,
         )
 
-    def update_settlement_status(
+    def update_deduction_status(
         self,
-        movement_id: Union[str, int],
+        deduction_id: str,
         status: str,
         company_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+    ) -> Dict[str, Any]:
         """
-        Update the ready_to_pay_flag (process status) for all settlements on a movement.
+        Update the ready_to_pay_flag (process status) for a single deduction.
         
-        Finds all settlements for the given movement_id and updates their
-        ready_to_pay_flag to the specified status using PUT /settlement/update.
+        Uses PUT /drs_pending_deduct/update to change the status.
         
         Args:
-            movement_id: The movement ID to find settlements for
+            deduction_id: The deduction ID to update
             status: New status for ready_to_pay_flag. Valid values:
                 - "Y" - Process (ready to pay)
                 - "N" - Hold (not ready to pay)  
@@ -1106,25 +1105,80 @@ class TMSClient:
             company_id: Override Company ID for this request (optional)
             
         Returns:
-            List of updated settlement objects from the API
+            Updated deduction object from the API
+            
+        Raises:
+            ValueError: If status is not Y, N, or V
+            
+        Examples:
+            >>> # Put a deduction on hold
+            >>> updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "N", company_id="TMS2")
+            
+            >>> # Mark deduction ready to process
+            >>> updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "Y", company_id="TMS2")
+        """
+        status = status.upper()
+        if status not in ("Y", "N", "V"):
+            raise ValueError(f"Invalid status '{status}'. Must be 'Y' (Process), 'N' (Hold), or 'V' (Void)")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        payload = {
+            "__type": "drs_pending_deduct",
+            "id": deduction_id,
+            "ready_to_pay_flag": status
+        }
+        
+        response = self.put(
+            "/drs_pending_deduct/update",
+            json=payload,
+            headers=headers,
+            company_id=company_id
+        )
+        return response.json()
+
+    def update_settlement_status(
+        self,
+        movement_id: Union[str, int],
+        status: str,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update the ready_to_pay_flag (process status) for all settlements AND 
+        deductions on a movement.
+        
+        Finds all settlements and deductions for the given movement_id and updates
+        their ready_to_pay_flag to the specified status.
+        
+        Args:
+            movement_id: The movement ID to find settlements/deductions for
+            status: New status for ready_to_pay_flag. Valid values:
+                - "Y" - Process (ready to pay)
+                - "N" - Hold (not ready to pay)  
+                - "V" - Void
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            Dict with 'settlements' and 'deductions' lists of updated objects
             
         Raises:
             ValueError: If status is not Y, N, or V
             Exception: If no settlements found or update fails
             
         Examples:
-            >>> # Put a movement's settlements on hold
-            >>> updated = client.update_settlement_status("1258474", "N")
-            >>> print(f"Updated {len(updated)} settlements to Hold")
+            >>> # Put a movement's settlements and deductions on hold
+            >>> result = client.update_settlement_status("1258474", "N")
+            >>> print(f"Updated {len(result['settlements'])} settlements")
+            >>> print(f"Updated {len(result['deductions'])} deductions")
             
-            >>> # Mark settlements ready to process
-            >>> updated = client.update_settlement_status("1258474", "Y")
-            
-            >>> # Void settlements
-            >>> updated = client.update_settlement_status("1258474", "V")
+            >>> # Mark ready to process
+            >>> result = client.update_settlement_status("1258474", "Y")
             
             >>> # Update in different company
-            >>> updated = client.update_settlement_status("1258474", "N", company_id="TMS2")
+            >>> result = client.update_settlement_status("1258474", "N", company_id="TMS2")
         """
         # Validate status
         status = status.upper()
@@ -1143,20 +1197,20 @@ class TMSClient:
             raise Exception(f"No settlements found for movement_id {movement_id_str}")
         
         updated_settlements = []
+        updated_deductions = []
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
         
+        # Update settlements
         for settlement in settlements:
-            # Use minimal payload - just id and the field to change
             payload = {
                 "__type": "settlement",
                 "id": settlement.get("id"),
                 "ready_to_pay_flag": status
             }
             
-            # PUT to /settlement/update
             response = self.put(
                 "/settlement/update",
                 json=payload,
@@ -1165,7 +1219,36 @@ class TMSClient:
             )
             updated_settlements.append(response.json())
         
-        return updated_settlements
+        # Find and update all deductions for this movement
+        try:
+            deductions = self.search_deductions(
+                {"drs_pending_deduct.movement_id": movement_id_str},
+                company_id=company_id,
+            )
+        except Exception:
+            deductions = []
+        
+        for deduction in deductions:
+            deduction_id = deduction.get("id")
+            if deduction_id:
+                payload = {
+                    "__type": "drs_pending_deduct",
+                    "id": deduction_id,
+                    "ready_to_pay_flag": status
+                }
+                
+                response = self.put(
+                    "/drs_pending_deduct/update",
+                    json=payload,
+                    headers=headers,
+                    company_id=company_id
+                )
+                updated_deductions.append(response.json())
+        
+        return {
+            "settlements": updated_settlements,
+            "deductions": updated_deductions
+        }
 
     def search_misc_billing_history(
         self,

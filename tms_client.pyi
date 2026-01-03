@@ -264,13 +264,22 @@ class TMSClient:
         """Get settlements that are on hold (not ready to pay)."""
         ...
 
+    def update_deduction_status(
+        self,
+        deduction_id: str,
+        status: str,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update ready_to_pay_flag for a single deduction. Status: Y=Process, N=Hold, V=Void."""
+        ...
+
     def update_settlement_status(
         self,
         movement_id: Union[str, int],
         status: str,
         company_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
-        """Update ready_to_pay_flag for all settlements on a movement. Status: Y=Process, N=Hold, V=Void."""
+    ) -> Dict[str, Any]:
+        """Update ready_to_pay_flag for all settlements AND deductions on a movement. Status: Y=Process, N=Hold, V=Void. Returns dict with 'settlements' and 'deductions' lists."""
         ...
 
     def search_deductions(

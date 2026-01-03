@@ -106,25 +106,27 @@ Each comment includes:
 
 ---
 
-## [2025-12-31] Settlement Status Updates
+## [2025-12-31] Settlement & Deduction Status Updates
 
 ### Added
-- **`update_settlement_status()`** - Update the `ready_to_pay_flag` for settlements on a movement
+- **`update_settlement_status()`** - Update the `ready_to_pay_flag` for all settlements AND deductions on a movement
+- **`update_deduction_status()`** - Update the `ready_to_pay_flag` for a single deduction
 
 ### What It Does
-Uses `PUT /settlement/update` endpoint to change the process status of pending settlements. This is the same as changing the status in the McLeod UI settlement screen.
+Uses `PUT /settlement/update` and `PUT /drs_pending_deduct/update` endpoints to change the process status of pending settlements and their associated deductions. This is the same as changing the status in the McLeod UI.
 
 ### Usage
 ```python
-# Put a movement's settlements on hold
-updated = client.update_settlement_status("1130249", "N", company_id="TMS2")
-print(f"Updated {len(updated)} settlement(s) to Hold")
+# Put a movement's settlements AND deductions on hold
+result = client.update_settlement_status("1195486", "N", company_id="TMS2")
+print(f"Updated {len(result['settlements'])} settlement(s)")
+print(f"Updated {len(result['deductions'])} deduction(s)")
 
-# Mark settlements ready to process (pay)
-updated = client.update_settlement_status("1130249", "Y", company_id="TMS2")
+# Mark ready to process (pay)
+result = client.update_settlement_status("1195486", "Y", company_id="TMS2")
 
-# Void settlements
-updated = client.update_settlement_status("1130249", "V", company_id="TMS2")
+# Update a single deduction
+updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "N", company_id="TMS2")
 ```
 
 ### Valid Status Values
@@ -135,28 +137,32 @@ updated = client.update_settlement_status("1130249", "V", company_id="TMS2")
 | `V` | Void | Voided |
 
 ### How It Works
+**`update_settlement_status()`**:
 1. Searches for settlements using `movement.id` filter
-2. For each settlement found, sends minimal PUT payload:
-   ```json
-   {"__type": "settlement", "id": "...", "ready_to_pay_flag": "N"}
-   ```
-3. Returns list of updated settlement objects
+2. Updates each settlement via `PUT /settlement/update`
+3. Searches for deductions using `drs_pending_deduct.movement_id` filter
+4. Updates each deduction via `PUT /drs_pending_deduct/update`
+5. Returns `{"settlements": [...], "deductions": [...]}`
+
+**`update_deduction_status()`**:
+1. Sends minimal PUT payload to `/drs_pending_deduct/update`
+2. Returns updated deduction object
 
 ### Key Implementation Notes
-- **Filter**: Use `movement.id` (not `settlement.movement_id`) when searching settlements
-- **Minimal Payload**: Only `__type`, `id`, and changed field needed - no need for full object
+- **Minimal Payload**: Only `__type`, `id`, and changed field needed
 - **Auth**: Works with API key or Basic auth
-- **Returns**: Full updated settlement object from API
+- **Deductions**: `update_settlement_status()` automatically updates all associated deductions
 
 ### Files Changed
-- `tms_client.py` - Added `update_settlement_status()` function
-- `tms_client.pyi` - Added type stub
+- `tms_client.py` - Added functions
+- `tms_client.pyi` - Added type stubs
 - `README.md` - Added documentation
 - `USAGE.md` - Added examples
 - `examples.py` - Added example function
 
 ### Related Functions
 - `search_settlements()` - Find settlements by filters
+- `search_deductions()` - Find deductions by filters
 - `get_settlements_on_hold()` - Get settlements with `ready_to_pay_flag="N"`
 
 ---
@@ -288,7 +294,8 @@ else:
 | Function | Endpoint | Auth |
 |----------|----------|------|
 | `search_settlements()` | `/settlements/search` | Basic or API Key |
-| `update_settlement_status()` | `/settlement/update` | Basic or API Key |
+| `update_settlement_status()` | `/settlement/update` + `/drs_pending_deduct/update` | Basic or API Key |
+| `update_deduction_status()` | `/drs_pending_deduct/update` | Basic or API Key |
 | `search_settlement_history()` | `/settlements/history/search` | Basic or API Key |
 | `is_movement_paid()` | `/settlements/history/search` | Basic or API Key |
 | `search_deductions()` | `/deductions/search` | Basic or API Key |

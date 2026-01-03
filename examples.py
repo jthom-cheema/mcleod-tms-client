@@ -1276,50 +1276,103 @@ def example_settlement_search():
 
 
 def example_update_settlement_status():
-    """Update settlement process status (ready_to_pay_flag).
+    """Update settlement and deduction process status (ready_to_pay_flag).
     
-    Uses PUT /settlement/update endpoint to change status:
+    Uses PUT /settlement/update and PUT /drs_pending_deduct/update endpoints:
     - Y = Process (ready to pay)
     - N = Hold (not ready to pay)
     - V = Void
     """
     # Works with username/password or API key
     with TMSClient("username", "password") as client:
-        movement_id = "1130249"
+        movement_id = "1195486"
         company = "TMS2"
         
         # Check current status
-        print("=== Current Settlement Status ===")
+        print("=== Current Status ===")
         settlements = client.search_settlements(
             {"movement.id": movement_id}, 
             company_id=company
         )
         if settlements:
-            print(f"Movement {movement_id}: ready_to_pay_flag = {settlements[0].get('ready_to_pay_flag')}")
+            print(f"Settlement: ready_to_pay_flag = {settlements[0].get('ready_to_pay_flag')}")
         
-        # Put settlement on hold
-        print("\n=== Putting Settlement On Hold ===")
-        updated = client.update_settlement_status(movement_id, "N", company_id=company)
-        print(f"Updated {len(updated)} settlement(s) to Hold (N)")
+        deductions = client.search_deductions(
+            {"drs_pending_deduct.movement_id": movement_id},
+            company_id=company
+        )
+        for d in deductions:
+            print(f"Deduction {d.get('deduct_code_id')}: ready_to_pay_flag = {d.get('ready_to_pay_flag')}")
+        
+        # Put settlement AND deductions on hold
+        print("\n=== Putting Settlement & Deductions On Hold ===")
+        result = client.update_settlement_status(movement_id, "N", company_id=company)
+        print(f"Updated {len(result['settlements'])} settlement(s) to Hold (N)")
+        print(f"Updated {len(result['deductions'])} deduction(s) to Hold (N)")
         
         # Mark ready to process
         print("\n=== Marking Ready to Process ===")
-        updated = client.update_settlement_status(movement_id, "Y", company_id=company)
-        print(f"Updated {len(updated)} settlement(s) to Process (Y)")
+        result = client.update_settlement_status(movement_id, "Y", company_id=company)
+        print(f"Updated {len(result['settlements'])} settlement(s) to Process (Y)")
+        print(f"Updated {len(result['deductions'])} deduction(s) to Process (Y)")
         
-        # Void example (commented out - destructive action)
-        # updated = client.update_settlement_status(movement_id, "V", company_id=company)
-        # print(f"Voided {len(updated)} settlement(s)")
+        # Update a single deduction directly
+        print("\n=== Update Single Deduction ===")
+        if deductions:
+            deduction_id = deductions[0].get('id')
+            updated = client.update_deduction_status(deduction_id, "N", company_id=company)
+            print(f"Updated deduction {deduction_id}: ready_to_pay_flag = {updated.get('ready_to_pay_flag')}")
         
-        # Batch update example - put multiple movements on hold
+        # Batch update example
         print("\n=== Batch Update Example ===")
-        movement_ids = ["1130249", "1130250", "1130251"]
+        movement_ids = ["1195486", "1195487", "1195488"]
         for mid in movement_ids:
             try:
-                updated = client.update_settlement_status(mid, "N", company_id=company)
-                print(f"✅ Movement {mid}: {len(updated)} settlement(s) put on hold")
+                result = client.update_settlement_status(mid, "N", company_id=company)
+                print(f"✅ Movement {mid}: {len(result['settlements'])} settlement(s), {len(result['deductions'])} deduction(s)")
             except Exception as e:
                 print(f"❌ Movement {mid}: {e}")
+
+
+def example_batch_update_deductions_from_file():
+    """Batch update deductions from a file of movement IDs.
+    
+    Useful when settlements are on hold but deductions need to be synced.
+    Reads movement IDs from a file and updates all deductions to match.
+    """
+    with TMSClient("username", "password") as client:
+        company = "TMS2"
+        
+        # Read movement IDs from file (one per line)
+        with open("tests/put_on_hold.txt", "r") as f:
+            movement_ids = [line.strip() for line in f if line.strip()]
+        
+        print(f"Processing {len(movement_ids)} movements...")
+        
+        total_deductions = 0
+        for i, movement_id in enumerate(movement_ids, 1):
+            try:
+                # Search for deductions
+                deductions = client.search_deductions(
+                    {"drs_pending_deduct.movement_id": movement_id},
+                    company_id=company
+                )
+                
+                if not deductions:
+                    continue
+                
+                # Update each deduction to Hold
+                for ded in deductions:
+                    if ded.get('ready_to_pay_flag') != 'N':
+                        client.update_deduction_status(ded['id'], "N", company_id=company)
+                        total_deductions += 1
+                
+                print(f"[{i}/{len(movement_ids)}] Movement {movement_id}: {len(deductions)} deduction(s)")
+                
+            except Exception as e:
+                print(f"[{i}/{len(movement_ids)}] Movement {movement_id}: ERROR - {e}")
+        
+        print(f"\nTotal deductions updated: {total_deductions}")
 
 
 def example_get_comments():

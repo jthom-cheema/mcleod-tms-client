@@ -215,25 +215,28 @@ for settlement in settlements:
     print(f"Payee: {settlement.get('payee_id')}")
     print(f"Amount: ${settlement.get('amount', 0)}")
 
-# Update settlement status - put on hold
-updated = client.update_settlement_status("1130249", "N", company_id="TMS2")
-print(f"Updated {len(updated)} settlement(s) to Hold")
+# Update settlement AND deduction status - put on hold
+result = client.update_settlement_status("1195486", "N", company_id="TMS2")
+print(f"Updated {len(result['settlements'])} settlement(s)")
+print(f"Updated {len(result['deductions'])} deduction(s)")
 
-# Mark settlements ready to process (pay)
-updated = client.update_settlement_status("1130249", "Y", company_id="TMS2")
+# Mark ready to process (pay)
+result = client.update_settlement_status("1195486", "Y", company_id="TMS2")
 
-# Void settlements  
-updated = client.update_settlement_status("1130249", "V", company_id="TMS2")
+# Update a single deduction directly
+updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "N", company_id="TMS2")
 ```
 
 **Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
 
-**Status Values for `update_settlement_status()`**:
+**Status Values for `update_settlement_status()` and `update_deduction_status()`**:
 | Value | Status | Description |
 |-------|--------|-------------|
 | `Y` | Process | Ready to pay |
 | `N` | Hold | Not ready to pay |
 | `V` | Void | Voided |
+
+**Note**: `update_settlement_status()` updates both settlements AND all associated deductions for the movement.
 
 ### Deductions
 ```python
