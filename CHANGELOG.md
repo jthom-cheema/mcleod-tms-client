@@ -4,6 +4,61 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2026-01-06] Settlement OK to Pay Date Update
+
+### Added
+- **`update_settlement_ok2pay_date()`** - Update the `ok2pay_date` (OK to Pay Date) for a single unpaid settlement
+
+### What It Does
+Updates the OK to Pay Date on a settlement using `PUT /settlement/update`. Accepts flexible date formats including datetime objects, `YYYY-MM-DD`, `MM/DD/YYYY`, or the API format (`YYYYMMDDHHMMSS±ZZZZ`). Defaults to PST timezone (-0800) to match McLeod's timezone.
+
+### Usage
+```python
+from tms_client import TMSClient
+from datetime import datetime
+
+with TMSClient() as client:
+    # First, find the settlement ID
+    settlements = client.search_settlements({'movement.id': '1195486'}, company_id='TMS2')
+    settlement_id = settlements[0]['id']
+    
+    # Update using string date (MM/DD/YYYY)
+    updated = client.update_settlement_ok2pay_date(
+        settlement_id,
+        "01/10/2026",
+        company_id="TMS2"
+    )
+    
+    # Update using datetime object
+    updated = client.update_settlement_ok2pay_date(
+        settlement_id,
+        datetime(2026, 1, 10),
+        company_id="TMS2"
+    )
+    
+    # Update using YYYY-MM-DD format
+    updated = client.update_settlement_ok2pay_date(
+        settlement_id,
+        "2026-01-10",
+        company_id="TMS2"
+    )
+```
+
+### Accepted Date Formats
+| Format | Example |
+|--------|---------|
+| `datetime` object | `datetime(2026, 1, 10)` |
+| `MM/DD/YYYY` | `"01/10/2026"` |
+| `YYYY-MM-DD` | `"2026-01-10"` |
+| API format | `"20260110000000-0800"` |
+
+### Key Implementation Notes
+- Uses `PUT /settlement/update` endpoint (same as `update_settlement_status()`)
+- Defaults to PST timezone (-0800) for naive datetimes to match McLeod's timezone
+- Returns the updated settlement object from the API
+
+---
+
 ## [2025-01-XX] Comment Management
 
 ### Added
@@ -295,6 +350,7 @@ else:
 |----------|----------|------|
 | `search_settlements()` | `/settlements/search` | Basic or API Key |
 | `update_settlement_status()` | `/settlement/update` + `/drs_pending_deduct/update` | Basic or API Key |
+| `update_settlement_ok2pay_date()` | `/settlement/update` | Basic or API Key |
 | `update_deduction_status()` | `/drs_pending_deduct/update` | Basic or API Key |
 | `search_settlement_history()` | `/settlements/history/search` | Basic or API Key |
 | `is_movement_paid()` | `/settlements/history/search` | Basic or API Key |

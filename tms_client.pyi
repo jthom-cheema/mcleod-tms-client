@@ -282,6 +282,15 @@ class TMSClient:
         """Update ready_to_pay_flag for all settlements AND deductions on a movement. Status: Y=Process, N=Hold, V=Void. Returns dict with 'settlements' and 'deductions' lists."""
         ...
 
+    def update_settlement_ok2pay_date(
+        self,
+        settlement_id: str,
+        ok2pay_date: Union[str, datetime],
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update ok2pay_date (OK to Pay Date) for a single settlement. Accepts datetime or string (YYYY-MM-DD, MM/DD/YYYY, or API format)."""
+        ...
+
     def search_deductions(
         self,
         filters: Dict[str, Any],

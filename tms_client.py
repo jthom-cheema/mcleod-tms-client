@@ -1250,6 +1250,116 @@ class TMSClient:
             "deductions": updated_deductions
         }
 
+    def update_settlement_ok2pay_date(
+        self,
+        settlement_id: str,
+        ok2pay_date: Union[str, datetime],
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update the ok2pay_date (OK to Pay Date) for a single unpaid settlement.
+        
+        Uses PUT /settlement/update to change the OK to pay date on a settlement.
+        
+        Args:
+            settlement_id: The settlement ID to update (the 'id' field from settlement)
+            ok2pay_date: The new OK to pay date. Can be:
+                - datetime object (formatted as YYYYMMDDHHMMSS±ZZZZ, naive defaults to -0700)
+                - String in API format (YYYYMMDDHHMMSS±ZZZZ) 
+                - String date in common formats (YYYY-MM-DD, MM/DD/YYYY)
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            Dict containing the updated settlement object from the API
+            
+        Raises:
+            Exception: If update fails
+            
+        Examples:
+            >>> # Update using datetime object
+            >>> from datetime import datetime
+            >>> updated = client.update_settlement_ok2pay_date(
+            ...     "zz1abc123def",
+            ...     datetime(2026, 1, 15)
+            ... )
+            
+            >>> # Update using string date (YYYY-MM-DD)
+            >>> updated = client.update_settlement_ok2pay_date(
+            ...     "zz1abc123def", 
+            ...     "2026-01-15"
+            ... )
+            
+            >>> # Update using API format string
+            >>> updated = client.update_settlement_ok2pay_date(
+            ...     "zz1abc123def",
+            ...     "20260115000000-0700"
+            ... )
+            
+            >>> # Update in different company
+            >>> updated = client.update_settlement_ok2pay_date(
+            ...     "zz1abc123def",
+            ...     datetime(2026, 1, 15),
+            ...     company_id="TMS2"
+            ... )
+        """
+        # Format the date to API format
+        if isinstance(ok2pay_date, datetime):
+            dt = ok2pay_date
+            # Default -0800 (PST) if naive - matches McLeod's timezone
+            if dt.tzinfo is None:
+                from datetime import timezone
+                dt = dt.replace(tzinfo=timezone(timedelta(hours=-8)))
+            formatted_date = dt.strftime("%Y%m%d%H%M%S%z")
+        elif isinstance(ok2pay_date, str):
+            # Try to parse common date formats and convert to API format
+            ok2pay_date = ok2pay_date.strip()
+            
+            # If already in API format (14+ digits with timezone), use as-is
+            if len(ok2pay_date) >= 14 and ok2pay_date[:14].isdigit():
+                formatted_date = ok2pay_date
+            else:
+                # Try common date formats
+                parsed_date = None
+                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%Y/%m/%d"):
+                    try:
+                        parsed_date = datetime.strptime(ok2pay_date, fmt)
+                        break
+                    except ValueError:
+                        continue
+                
+                if parsed_date is None:
+                    raise ValueError(
+                        f"Could not parse date '{ok2pay_date}'. "
+                        "Use datetime object, YYYY-MM-DD, MM/DD/YYYY, or API format (YYYYMMDDHHMMSS±ZZZZ)"
+                    )
+                
+                # Apply default timezone -0800 (PST) - matches McLeod's timezone
+                from datetime import timezone
+                parsed_date = parsed_date.replace(tzinfo=timezone(timedelta(hours=-8)))
+                formatted_date = parsed_date.strftime("%Y%m%d%H%M%S%z")
+        else:
+            raise ValueError(f"ok2pay_date must be datetime or string, got {type(ok2pay_date)}")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        payload = {
+            "__type": "settlement",
+            "id": settlement_id,
+            "ok2pay_date": formatted_date
+        }
+        
+        response = self.put(
+            "/settlement/update",
+            json=payload,
+            headers=headers,
+            company_id=company_id
+        )
+        
+        return response.json()
+
     def search_misc_billing_history(
         self,
         bill_date_after: Union[str, datetime],

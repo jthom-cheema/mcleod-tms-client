@@ -199,6 +199,14 @@ with TMSClient("username", "password") as client:
     
     # Update a single deduction
     updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "N", company_id="TMS2")
+    
+    # Update OK to Pay Date on a settlement
+    settlements = client.search_settlements({'movement.id': '1195486'}, company_id='TMS2')
+    updated = client.update_settlement_ok2pay_date(
+        settlements[0]['id'],
+        "01/10/2026",  # or datetime(2026, 1, 10) or "2026-01-10"
+        company_id="TMS2"
+    )
 ```
 
 **Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
@@ -206,6 +214,8 @@ with TMSClient("username", "password") as client:
 **Status Values**: `Y` (Process/Ready), `N` (Hold), `V` (Void)
 
 **Note**: `update_settlement_status()` updates both settlements AND all associated deductions for the movement.
+
+**OK to Pay Date**: Use `update_settlement_ok2pay_date()` to change the OK to pay date. Accepts `datetime`, `MM/DD/YYYY`, `YYYY-MM-DD`, or API format strings.
 
 ## Deductions Search
 

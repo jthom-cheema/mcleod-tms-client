@@ -1334,6 +1334,74 @@ def example_update_settlement_status():
                 print(f"❌ Movement {mid}: {e}")
 
 
+def example_update_settlement_ok2pay_date():
+    """Update the OK to Pay Date on a settlement.
+    
+    Uses PUT /settlement/update endpoint to change the ok2pay_date field.
+    Accepts flexible date formats: datetime, MM/DD/YYYY, YYYY-MM-DD, or API format.
+    """
+    from datetime import datetime
+    
+    with TMSClient("username", "password") as client:
+        movement_id = "1195486"
+        company = "TMS2"
+        
+        # First, find the settlement
+        print("=== Finding Settlement ===")
+        settlements = client.search_settlements(
+            {"movement.id": movement_id},
+            company_id=company
+        )
+        
+        if not settlements:
+            print(f"No settlements found for movement {movement_id}")
+            return
+        
+        settlement = settlements[0]
+        settlement_id = settlement.get('id')
+        print(f"Settlement ID: {settlement_id}")
+        print(f"Current OK2Pay Date: {settlement.get('ok2pay_date')}")
+        
+        # Update using MM/DD/YYYY format
+        print("\n=== Updating OK2Pay Date (MM/DD/YYYY) ===")
+        updated = client.update_settlement_ok2pay_date(
+            settlement_id,
+            "01/15/2026",
+            company_id=company
+        )
+        print(f"Updated OK2Pay Date: {updated.get('ok2pay_date')}")
+        
+        # Update using datetime object
+        print("\n=== Updating OK2Pay Date (datetime) ===")
+        new_date = datetime(2026, 1, 20)
+        updated = client.update_settlement_ok2pay_date(
+            settlement_id,
+            new_date,
+            company_id=company
+        )
+        print(f"Updated OK2Pay Date: {updated.get('ok2pay_date')}")
+        
+        # Update using YYYY-MM-DD format
+        print("\n=== Updating OK2Pay Date (YYYY-MM-DD) ===")
+        updated = client.update_settlement_ok2pay_date(
+            settlement_id,
+            "2026-01-25",
+            company_id=company
+        )
+        print(f"Updated OK2Pay Date: {updated.get('ok2pay_date')}")
+        
+        # Restore original date
+        print("\n=== Restoring Original Date ===")
+        original_date = settlement.get('ok2pay_date')
+        if original_date:
+            updated = client.update_settlement_ok2pay_date(
+                settlement_id,
+                original_date,
+                company_id=company
+            )
+            print(f"Restored OK2Pay Date: {updated.get('ok2pay_date')}")
+
+
 def example_batch_update_deductions_from_file():
     """Batch update deductions from a file of movement IDs.
     
