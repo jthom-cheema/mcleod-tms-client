@@ -1,4 +1,5 @@
 import os
+import sys
 import base64
 import requests
 import json
@@ -1258,19 +1259,27 @@ class TMSClient:
     ) -> Dict[str, Any]:
         """
         Update the ok2pay_date (OK to Pay Date) for a single unpaid settlement.
+        Also automatically updates transaction_date on all associated deductions and earnings
+        to match the OK to pay date.
         
-        Uses PUT /settlement/update to change the OK to pay date on a settlement.
+        Uses PUT /settlement/update to change the OK to pay date on a settlement,
+        then updates all related deductions and earnings transaction dates.
         
         Args:
             settlement_id: The settlement ID to update (the 'id' field from settlement)
             ok2pay_date: The new OK to pay date. Can be:
-                - datetime object (formatted as YYYYMMDDHHMMSS±ZZZZ, naive defaults to -0700)
+                - datetime object (formatted as YYYYMMDDHHMMSS±ZZZZ, naive defaults to -0800)
                 - String in API format (YYYYMMDDHHMMSS±ZZZZ) 
                 - String date in common formats (YYYY-MM-DD, MM/DD/YYYY)
             company_id: Override Company ID for this request (optional)
             
         Returns:
-            Dict containing the updated settlement object from the API
+            Dict containing:
+                - The updated settlement object (backward compatible - can access like before)
+                - "deductions_updated": List of updated deduction objects
+                - "earnings_updated": List of updated earnings objects
+                - "deductions_count": Number of deductions updated
+                - "earnings_count": Number of earnings updated
             
         Raises:
             Exception: If update fails
@@ -1278,30 +1287,48 @@ class TMSClient:
         Examples:
             >>> # Update using datetime object
             >>> from datetime import datetime
-            >>> updated = client.update_settlement_ok2pay_date(
+            >>> result = client.update_settlement_ok2pay_date(
             ...     "zz1abc123def",
             ...     datetime(2026, 1, 15)
             ... )
+            >>> # Access settlement as before (backward compatible)
+            >>> settlement = result
+            >>> print(settlement.get('id'))
+            >>> # Access new information
+            >>> print(f"Updated {result.get('deductions_count', 0)} deductions")
             
             >>> # Update using string date (YYYY-MM-DD)
-            >>> updated = client.update_settlement_ok2pay_date(
+            >>> result = client.update_settlement_ok2pay_date(
             ...     "zz1abc123def", 
             ...     "2026-01-15"
             ... )
             
             >>> # Update using API format string
-            >>> updated = client.update_settlement_ok2pay_date(
+            >>> result = client.update_settlement_ok2pay_date(
             ...     "zz1abc123def",
-            ...     "20260115000000-0700"
+            ...     "20260115000000-0800"
             ... )
             
             >>> # Update in different company
-            >>> updated = client.update_settlement_ok2pay_date(
+            >>> result = client.update_settlement_ok2pay_date(
             ...     "zz1abc123def",
             ...     datetime(2026, 1, 15),
             ...     company_id="TMS2"
             ... )
         """
+        # First, get the settlement to find the movement_id
+        settlements = self.search_settlements(
+            {"settlement.id": settlement_id},
+            company_id=company_id
+        )
+        if not settlements:
+            raise ValueError(f"Settlement with id '{settlement_id}' not found")
+        
+        settlement = settlements[0]
+        movement_id = settlement.get("movement_id")
+        if not movement_id:
+            raise ValueError(f"Settlement '{settlement_id}' has no associated movement_id")
+        
         # Format the date to API format
         if isinstance(ok2pay_date, datetime):
             dt = ok2pay_date
@@ -1345,6 +1372,7 @@ class TMSClient:
             "Accept": "application/json"
         }
         
+        # Update the settlement
         payload = {
             "__type": "settlement",
             "id": settlement_id,
@@ -1358,7 +1386,293 @@ class TMSClient:
             company_id=company_id
         )
         
-        return response.json()
+        updated_settlement = response.json()
+        
+        # Now update deductions and earnings to match the OK to pay date
+        # Format transaction_date (use the same formatted_date, which is already in correct format)
+        updated_deductions = []
+        updated_earnings = []
+        movement_id_str = str(movement_id)
+        
+        # Find and update all deductions for this movement
+        try:
+            deductions = self.search_deductions(
+                {"drs_pending_deduct.movement_id": movement_id_str},
+                company_id=company_id,
+            )
+        except Exception:
+            deductions = []
+        
+        for deduction in deductions:
+            deduction_id = deduction.get("id")
+            if deduction_id:
+                payload = {
+                    "__type": "drs_pending_deduct",
+                    "id": deduction_id,
+                    "transaction_date": formatted_date
+                }
+                
+                try:
+                    response = self.put(
+                        "/drs_pending_deduct/update",
+                        json=payload,
+                        headers=headers,
+                        company_id=company_id
+                    )
+                    updated_deductions.append(response.json())
+                except Exception as e:
+                    # Log error but continue with other deductions
+                    print(f"Error updating deduction {deduction_id}: {e}", file=sys.stderr)
+        
+        # Find and update all earnings (driver_extra_pay) for this movement
+        try:
+            earnings = self.get_json(
+                "/driver_extra_pay/search",
+                company_id=company_id,
+                params={"movement_id": movement_id_str}
+            )
+            if not isinstance(earnings, list):
+                earnings = []
+        except Exception:
+            earnings = []
+        
+        for earning in earnings:
+            earning_id = earning.get("id")
+            if earning_id:
+                payload = {
+                    "__type": "driver_extra_pay",
+                    "id": earning_id,
+                    "transaction_date": formatted_date
+                }
+                
+                try:
+                    response = self.put(
+                        "/driver_extra_pay/update",
+                        json=payload,
+                        headers=headers,
+                        company_id=company_id
+                    )
+                    updated_earnings.append(response.json())
+                except Exception as e:
+                    # Log error but continue with other earnings
+                    print(f"Error updating earning {earning_id}: {e}", file=sys.stderr)
+        
+        # Return result that's backward compatible but includes new info
+        # Merge settlement fields with update counts for backward compatibility
+        result = dict(updated_settlement)
+        result["deductions_updated"] = updated_deductions
+        result["earnings_updated"] = updated_earnings
+        result["deductions_count"] = len(updated_deductions)
+        result["earnings_count"] = len(updated_earnings)
+        
+        return result
+
+    def update_settlement_transaction_dates(
+        self,
+        settlement_id: Optional[str] = None,
+        movement_id: Optional[Union[str, int]] = None,
+        transaction_date: Union[str, datetime] = None,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update transaction_date on all deductions and earnings attached to a settlement.
+        
+        Updates the transaction_date field on all pending deductions (drs_pending_deduct)
+        and earnings (driver_extra_pay) associated with a settlement. You can provide
+        either a settlement_id or movement_id to identify the settlement.
+        
+        Args:
+            settlement_id: The settlement ID (the 'id' field from settlement). 
+                Either settlement_id or movement_id must be provided.
+            movement_id: The movement ID associated with the settlement.
+                Either settlement_id or movement_id must be provided.
+            transaction_date: The new transaction date. Can be:
+                - datetime object (formatted as YYYYMMDDHHMMSS±ZZZZ, naive defaults to -0800)
+                - String in API format (YYYYMMDDHHMMSS±ZZZZ) 
+                - String date in common formats (YYYY-MM-DD, MM/DD/YYYY)
+            company_id: Override Company ID for this request (optional)
+            
+        Returns:
+            Dict containing:
+                - "deductions_updated": List of updated deduction objects
+                - "earnings_updated": List of updated earnings objects
+                - "deductions_count": Number of deductions updated
+                - "earnings_count": Number of earnings updated
+                
+        Raises:
+            ValueError: If neither settlement_id nor movement_id is provided,
+                or if transaction_date cannot be parsed
+            
+        Examples:
+            >>> # Update using settlement_id and datetime
+            >>> from datetime import datetime
+            >>> result = client.update_settlement_transaction_dates(
+            ...     settlement_id="zz1abc123def",
+            ...     transaction_date=datetime(2026, 1, 15),
+            ...     company_id="TMS2"
+            ... )
+            >>> print(f"Updated {result['deductions_count']} deductions and {result['earnings_count']} earnings")
+            
+            >>> # Update using movement_id and string date
+            >>> result = client.update_settlement_transaction_dates(
+            ...     movement_id="1230166",
+            ...     transaction_date="2026-01-15",
+            ...     company_id="TMS2"
+            ... )
+            
+            >>> # Update using MM/DD/YYYY format
+            >>> result = client.update_settlement_transaction_dates(
+            ...     movement_id="1230166",
+            ...     transaction_date="01/15/2026",
+            ...     company_id="TMS2"
+            ... )
+        """
+        # Validate inputs
+        if not settlement_id and not movement_id:
+            raise ValueError("Either settlement_id or movement_id must be provided")
+        
+        if transaction_date is None:
+            raise ValueError("transaction_date must be provided")
+        
+        # Get movement_id from settlement if needed
+        if settlement_id and not movement_id:
+            settlements = self.search_settlements(
+                {"settlement.id": settlement_id},
+                company_id=company_id
+            )
+            if not settlements:
+                raise ValueError(f"Settlement with id '{settlement_id}' not found")
+            movement_id = settlements[0].get("movement_id")
+            if not movement_id:
+                raise ValueError(f"Settlement '{settlement_id}' has no associated movement_id")
+        
+        movement_id_str = str(movement_id)
+        
+        # Format the date to API format (full datetime with timezone)
+        # Based on sample data, transaction_date is stored as YYYYMMDDHHMMSS±ZZZZ
+        if isinstance(transaction_date, datetime):
+            dt = transaction_date
+            # Default -0800 (PST) if naive - matches McLeod's timezone
+            if dt.tzinfo is None:
+                from datetime import timezone
+                dt = dt.replace(tzinfo=timezone(timedelta(hours=-8)))
+            # Set time to midnight (000000)
+            dt = dt.replace(hour=0, minute=0, second=0, microsecond=0)
+            formatted_date = dt.strftime("%Y%m%d%H%M%S%z")
+        elif isinstance(transaction_date, str):
+            transaction_date = transaction_date.strip()
+            
+            # If already in full API format (YYYYMMDDHHMMSS±ZZZZ), use as-is
+            if len(transaction_date) >= 19 and transaction_date[:14].isdigit():
+                formatted_date = transaction_date
+            # If in YYYYMMDD format (8 digits), add time and timezone
+            elif len(transaction_date) == 8 and transaction_date.isdigit():
+                formatted_date = f"{transaction_date}000000-0800"
+            # If in API format with time but no timezone, add timezone
+            elif len(transaction_date) == 14 and transaction_date.isdigit():
+                formatted_date = f"{transaction_date}-0800"
+            else:
+                # Try common date formats
+                parsed_date = None
+                for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%m-%d-%Y", "%Y/%m/%d"):
+                    try:
+                        parsed_date = datetime.strptime(transaction_date, fmt)
+                        break
+                    except ValueError:
+                        continue
+                
+                if parsed_date is None:
+                    raise ValueError(
+                        f"Could not parse date '{transaction_date}'. "
+                        "Use datetime object, YYYY-MM-DD, MM/DD/YYYY, YYYYMMDD, or API format (YYYYMMDDHHMMSS±ZZZZ)"
+                    )
+                
+                # Apply default timezone -0800 (PST) - matches McLeod's timezone
+                from datetime import timezone
+                parsed_date = parsed_date.replace(tzinfo=timezone(timedelta(hours=-8)))
+                parsed_date = parsed_date.replace(hour=0, minute=0, second=0, microsecond=0)
+                formatted_date = parsed_date.strftime("%Y%m%d%H%M%S%z")
+        else:
+            raise ValueError(f"transaction_date must be datetime or string, got {type(transaction_date)}")
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        updated_deductions = []
+        updated_earnings = []
+        
+        # Find and update all deductions for this movement
+        try:
+            deductions = self.search_deductions(
+                {"drs_pending_deduct.movement_id": movement_id_str},
+                company_id=company_id,
+            )
+        except Exception:
+            deductions = []
+        
+        for deduction in deductions:
+            deduction_id = deduction.get("id")
+            if deduction_id:
+                payload = {
+                    "__type": "drs_pending_deduct",
+                    "id": deduction_id,
+                    "transaction_date": formatted_date
+                }
+                
+                try:
+                    response = self.put(
+                        "/drs_pending_deduct/update",
+                        json=payload,
+                        headers=headers,
+                        company_id=company_id
+                    )
+                    updated_deductions.append(response.json())
+                except Exception as e:
+                    # Log error but continue with other deductions
+                    print(f"Error updating deduction {deduction_id}: {e}", file=sys.stderr)
+        
+        # Find and update all earnings (driver_extra_pay) for this movement
+        try:
+            # Search driver_extra_pay table using TableRowService
+            earnings = self.get_json(
+                "/driver_extra_pay/search",
+                company_id=company_id,
+                params={"movement_id": movement_id_str}
+            )
+            if not isinstance(earnings, list):
+                earnings = []
+        except Exception:
+            earnings = []
+        
+        for earning in earnings:
+            earning_id = earning.get("id")
+            if earning_id:
+                payload = {
+                    "__type": "driver_extra_pay",
+                    "id": earning_id,
+                    "transaction_date": formatted_date
+                }
+                
+                try:
+                    response = self.put(
+                        "/driver_extra_pay/update",
+                        json=payload,
+                        headers=headers,
+                        company_id=company_id
+                    )
+                    updated_earnings.append(response.json())
+                except Exception as e:
+                    # Log error but continue with other earnings
+                    print(f"Error updating earning {earning_id}: {e}", file=sys.stderr)
+        
+        return {
+            "deductions_updated": updated_deductions,
+            "earnings_updated": updated_earnings,
+            "deductions_count": len(updated_deductions),
+            "earnings_count": len(updated_earnings)
+        }
 
     def search_misc_billing_history(
         self,

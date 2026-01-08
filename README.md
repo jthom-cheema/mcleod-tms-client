@@ -200,11 +200,23 @@ with TMSClient("username", "password") as client:
     # Update a single deduction
     updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "N", company_id="TMS2")
     
-    # Update OK to Pay Date on a settlement
+    # Update OK to Pay Date on a settlement (automatically updates deductions/earnings!)
     settlements = client.search_settlements({'movement.id': '1195486'}, company_id='TMS2')
     updated = client.update_settlement_ok2pay_date(
         settlements[0]['id'],
         "01/10/2026",  # or datetime(2026, 1, 10) or "2026-01-10"
+        company_id="TMS2"
+    )
+    # Access settlement fields (backward compatible)
+    print(f"OK to Pay Date: {updated.get('ok2pay_date')}")
+    # Access new update information
+    print(f"Deductions updated: {updated.get('deductions_count', 0)}")
+    print(f"Earnings updated: {updated.get('earnings_count', 0)}")
+    
+    # Update transaction dates explicitly (alternative)
+    result = client.update_settlement_transaction_dates(
+        movement_id="1195486",
+        transaction_date="2026-01-15",
         company_id="TMS2"
     )
 ```
@@ -215,7 +227,9 @@ with TMSClient("username", "password") as client:
 
 **Note**: `update_settlement_status()` updates both settlements AND all associated deductions for the movement.
 
-**OK to Pay Date**: Use `update_settlement_ok2pay_date()` to change the OK to pay date. Accepts `datetime`, `MM/DD/YYYY`, `YYYY-MM-DD`, or API format strings.
+**OK to Pay Date**: Use `update_settlement_ok2pay_date()` to change the OK to pay date. This function **automatically updates transaction dates** on all associated deductions and earnings to match the OK to pay date, ensuring consistency. Accepts `datetime`, `MM/DD/YYYY`, `YYYY-MM-DD`, or API format strings.
+
+**Transaction Dates**: Use `update_settlement_transaction_dates()` to explicitly update transaction dates on deductions and earnings without changing the OK to pay date. Accepts `settlement_id` or `movement_id` and any of the date formats above.
 
 ## Deductions Search
 

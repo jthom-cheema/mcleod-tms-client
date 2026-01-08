@@ -4,15 +4,43 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
-## [2026-01-06] Settlement OK to Pay Date Update
+## [2026-01-XX] Settlement Transaction Date Updates
 
 ### Added
-- **`update_settlement_ok2pay_date()`** - Update the `ok2pay_date` (OK to Pay Date) for a single unpaid settlement
+- **`update_settlement_transaction_dates()`** - Update `transaction_date` on all deductions and earnings attached to a settlement
+- **Enhanced `update_settlement_ok2pay_date()`** - Now automatically updates transaction dates on deductions and earnings to match the OK to pay date
 
 ### What It Does
-Updates the OK to Pay Date on a settlement using `PUT /settlement/update`. Accepts flexible date formats including datetime objects, `YYYY-MM-DD`, `MM/DD/YYYY`, or the API format (`YYYYMMDDHHMMSS±ZZZZ`). Defaults to PST timezone (-0800) to match McLeod's timezone.
+
+**`update_settlement_transaction_dates()`**: Updates the `transaction_date` field on all pending deductions (`drs_pending_deduct`) and earnings (`driver_extra_pay`) associated with a settlement. You can provide either a `settlement_id` or `movement_id` to identify the settlement. The transaction date is updated to match the settlement's OK to pay date.
+
+**Enhanced `update_settlement_ok2pay_date()`**: When updating the OK to Pay Date on a settlement, this function now automatically finds and updates all associated deductions and earnings to match the new OK to pay date. This ensures consistency across all settlement-related records. The function is fully backward compatible - existing code will continue to work and automatically benefit from this enhancement.
 
 ### Usage
+
+**Update transaction dates explicitly:**
+```python
+from tms_client import TMSClient
+from datetime import datetime
+
+with TMSClient() as client:
+    # Update using movement_id
+    result = client.update_settlement_transaction_dates(
+        movement_id="1195486",
+        transaction_date="2026-01-15",
+        company_id="TMS2"
+    )
+    print(f"Updated {result['deductions_count']} deductions and {result['earnings_count']} earnings")
+    
+    # Update using settlement_id and datetime
+    result = client.update_settlement_transaction_dates(
+        settlement_id="zz1abc123def",
+        transaction_date=datetime(2026, 1, 15),
+        company_id="TMS2"
+    )
+```
+
+**Automatic updates via OK to pay date (recommended):**
 ```python
 from tms_client import TMSClient
 from datetime import datetime
@@ -22,26 +50,20 @@ with TMSClient() as client:
     settlements = client.search_settlements({'movement.id': '1195486'}, company_id='TMS2')
     settlement_id = settlements[0]['id']
     
-    # Update using string date (MM/DD/YYYY)
+    # Update OK to pay date - deductions and earnings automatically updated too!
     updated = client.update_settlement_ok2pay_date(
         settlement_id,
         "01/10/2026",
         company_id="TMS2"
     )
     
-    # Update using datetime object
-    updated = client.update_settlement_ok2pay_date(
-        settlement_id,
-        datetime(2026, 1, 10),
-        company_id="TMS2"
-    )
+    # Access settlement fields (backward compatible)
+    print(f"Settlement ID: {updated.get('id')}")
+    print(f"OK to Pay Date: {updated.get('ok2pay_date')}")
     
-    # Update using YYYY-MM-DD format
-    updated = client.update_settlement_ok2pay_date(
-        settlement_id,
-        "2026-01-10",
-        company_id="TMS2"
-    )
+    # Access new update information
+    print(f"Deductions updated: {updated.get('deductions_count', 0)}")
+    print(f"Earnings updated: {updated.get('earnings_count', 0)}")
 ```
 
 ### Accepted Date Formats
@@ -50,12 +72,17 @@ with TMSClient() as client:
 | `datetime` object | `datetime(2026, 1, 10)` |
 | `MM/DD/YYYY` | `"01/10/2026"` |
 | `YYYY-MM-DD` | `"2026-01-10"` |
+| `YYYYMMDD` | `"20260110"` |
 | API format | `"20260110000000-0800"` |
 
 ### Key Implementation Notes
-- Uses `PUT /settlement/update` endpoint (same as `update_settlement_status()`)
+- Uses `PUT /settlement/update` for settlement updates
+- Uses `PUT /drs_pending_deduct/update` (TableRowService) for deduction updates
+- Uses `PUT /driver_extra_pay/update` (TableRowService) for earnings updates
 - Defaults to PST timezone (-0800) for naive datetimes to match McLeod's timezone
-- Returns the updated settlement object from the API
+- Transaction dates are formatted as `YYYYMMDDHHMMSS±ZZZZ` (full datetime with timezone)
+- `update_settlement_ok2pay_date()` returns the settlement object with additional fields: `deductions_updated`, `earnings_updated`, `deductions_count`, `earnings_count`
+- Fully backward compatible - existing code using `update_settlement_ok2pay_date()` automatically benefits from deduction/earnings updates
 
 ---
 

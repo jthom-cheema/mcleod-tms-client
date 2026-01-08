@@ -226,20 +226,36 @@ result = client.update_settlement_status("1195486", "Y", company_id="TMS2")
 # Update a single deduction directly
 updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "N", company_id="TMS2")
 
-# Update OK to Pay Date on a settlement
+# Update OK to Pay Date on a settlement (automatically updates deductions/earnings too!)
 from datetime import datetime
 
 settlements = client.search_settlements({'movement.id': '1195486'}, company_id='TMS2')
 settlement_id = settlements[0]['id']
 
-# Using MM/DD/YYYY format
+# Using MM/DD/YYYY format - deductions and earnings automatically updated!
 updated = client.update_settlement_ok2pay_date(settlement_id, "01/10/2026", company_id="TMS2")
+
+# Access settlement fields (backward compatible)
+print(f"Settlement ID: {updated.get('id')}")
+print(f"OK to Pay Date: {updated.get('ok2pay_date')}")
+
+# Access new update information
+print(f"Deductions updated: {updated.get('deductions_count', 0)}")
+print(f"Earnings updated: {updated.get('earnings_count', 0)}")
 
 # Using datetime object
 updated = client.update_settlement_ok2pay_date(settlement_id, datetime(2026, 1, 10), company_id="TMS2")
 
 # Using YYYY-MM-DD format
 updated = client.update_settlement_ok2pay_date(settlement_id, "2026-01-10", company_id="TMS2")
+
+# Update transaction dates explicitly (alternative to using ok2pay_date)
+result = client.update_settlement_transaction_dates(
+    movement_id="1195486",
+    transaction_date="2026-01-15",
+    company_id="TMS2"
+)
+print(f"Updated {result['deductions_count']} deductions and {result['earnings_count']} earnings")
 ```
 
 **Supported Filter Prefixes**: `settlement` (or no prefix), `movement`, `payee`
@@ -251,15 +267,19 @@ updated = client.update_settlement_ok2pay_date(settlement_id, "2026-01-10", comp
 | `N` | Hold | Not ready to pay |
 | `V` | Void | Voided |
 
-**Accepted Date Formats for `update_settlement_ok2pay_date()`**:
+**Accepted Date Formats for `update_settlement_ok2pay_date()` and `update_settlement_transaction_dates()`**:
 | Format | Example |
 |--------|---------|
 | `datetime` object | `datetime(2026, 1, 10)` |
 | `MM/DD/YYYY` | `"01/10/2026"` |
 | `YYYY-MM-DD` | `"2026-01-10"` |
+| `YYYYMMDD` | `"20260110"` |
 | API format | `"20260110000000-0800"` |
 
-**Note**: `update_settlement_status()` updates both settlements AND all associated deductions for the movement.
+**Important Notes**:
+- `update_settlement_status()` updates both settlements AND all associated deductions for the movement.
+- `update_settlement_ok2pay_date()` **automatically** updates transaction dates on all deductions and earnings to match the OK to pay date. This ensures consistency across all settlement records.
+- `update_settlement_transaction_dates()` allows you to explicitly update transaction dates on deductions and earnings without changing the OK to pay date.
 
 ### Deductions
 ```python

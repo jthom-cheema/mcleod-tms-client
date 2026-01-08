@@ -1337,7 +1337,12 @@ def example_update_settlement_status():
 def example_update_settlement_ok2pay_date():
     """Update the OK to Pay Date on a settlement.
     
-    Uses PUT /settlement/update endpoint to change the ok2pay_date field.
+    Automatically updates transaction dates on all associated deductions and earnings
+    to match the OK to pay date. This ensures consistency across all settlement records.
+    
+    Uses PUT /settlement/update endpoint to change the ok2pay_date field, then
+    automatically updates deductions and earnings via TableRowService.
+    
     Accepts flexible date formats: datetime, MM/DD/YYYY, YYYY-MM-DD, or API format.
     """
     from datetime import datetime
@@ -1363,13 +1368,18 @@ def example_update_settlement_ok2pay_date():
         print(f"Current OK2Pay Date: {settlement.get('ok2pay_date')}")
         
         # Update using MM/DD/YYYY format
+        # This automatically updates deductions and earnings too!
         print("\n=== Updating OK2Pay Date (MM/DD/YYYY) ===")
+        print("Note: This will also update transaction dates on deductions and earnings")
         updated = client.update_settlement_ok2pay_date(
             settlement_id,
             "01/15/2026",
             company_id=company
         )
         print(f"Updated OK2Pay Date: {updated.get('ok2pay_date')}")
+        # Access new information about what was updated
+        print(f"Deductions updated: {updated.get('deductions_count', 0)}")
+        print(f"Earnings updated: {updated.get('earnings_count', 0)}")
         
         # Update using datetime object
         print("\n=== Updating OK2Pay Date (datetime) ===")
@@ -1380,6 +1390,8 @@ def example_update_settlement_ok2pay_date():
             company_id=company
         )
         print(f"Updated OK2Pay Date: {updated.get('ok2pay_date')}")
+        print(f"Deductions updated: {updated.get('deductions_count', 0)}")
+        print(f"Earnings updated: {updated.get('earnings_count', 0)}")
         
         # Update using YYYY-MM-DD format
         print("\n=== Updating OK2Pay Date (YYYY-MM-DD) ===")
@@ -1389,6 +1401,8 @@ def example_update_settlement_ok2pay_date():
             company_id=company
         )
         print(f"Updated OK2Pay Date: {updated.get('ok2pay_date')}")
+        print(f"Deductions updated: {updated.get('deductions_count', 0)}")
+        print(f"Earnings updated: {updated.get('earnings_count', 0)}")
         
         # Restore original date
         print("\n=== Restoring Original Date ===")
@@ -1400,6 +1414,8 @@ def example_update_settlement_ok2pay_date():
                 company_id=company
             )
             print(f"Restored OK2Pay Date: {updated.get('ok2pay_date')}")
+            print(f"Deductions updated: {updated.get('deductions_count', 0)}")
+            print(f"Earnings updated: {updated.get('earnings_count', 0)}")
 
 
 def example_batch_update_deductions_from_file():

@@ -64,6 +64,9 @@ samples/
 downloads/
 rest_docs/
 
+# Documentation (auto-generated)
+docs/
+
 # Keep type stubs
 !*.pyi
 

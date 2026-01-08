@@ -1,6 +1,7 @@
 """Type stubs for tms_client module."""
 
 from typing import Optional, Dict, Any, Union, List
+from datetime import datetime
 import requests
 from pathlib import Path
 
@@ -288,7 +289,17 @@ class TMSClient:
         ok2pay_date: Union[str, datetime],
         company_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Update ok2pay_date (OK to Pay Date) for a single settlement. Accepts datetime or string (YYYY-MM-DD, MM/DD/YYYY, or API format)."""
+        """Update ok2pay_date (OK to Pay Date) for a single settlement and automatically updates transaction dates on deductions/earnings. Returns settlement dict with additional fields: deductions_updated, earnings_updated, deductions_count, earnings_count. Backward compatible - can access settlement fields directly."""
+        ...
+
+    def update_settlement_transaction_dates(
+        self,
+        settlement_id: Optional[str] = None,
+        movement_id: Optional[Union[str, int]] = None,
+        transaction_date: Union[str, datetime] = None,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Update transaction_date on all deductions and earnings attached to a settlement. Accepts settlement_id or movement_id, and datetime or string date."""
         ...
 
     def search_deductions(
