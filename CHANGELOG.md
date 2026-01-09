@@ -4,6 +4,104 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2026-01-XX] Billing Record Updates
+
+### Added
+- **`search_billing()`** - Search unposted billing records by various criteria
+- **`get_billing()`** - Get a single unposted billing record by ID
+- **`update_billing()`** - Update `ready_to_process` (Ready to Bill checkbox) and/or `billing_user_id` (Billing User field)
+
+### What It Does
+
+**`search_billing()`**: Searches the unposted billing table (bills that haven't been posted to history yet). Supports flexible filtering by any billing table fields such as `order_id`, `ready_to_process`, `billing_user_id`, `blnum`, `customer_id`, etc. Includes auto-pagination support to retrieve all results when there may be more than 100 records.
+
+**`get_billing()`**: Retrieves a single unposted billing record by its ID. Useful for getting full details of a specific bill before updating it.
+
+**`update_billing()`**: Updates the "Ready to Bill" checkbox (`ready_to_process`) and/or the "Billing User" field (`billing_user_id`) on unposted billing records. The `ready_to_process` field accepts both boolean values (True/False) and string values ("Y"/"N"), automatically converting to the correct format. All other billing fields are preserved during the update.
+
+### Usage
+
+**Search unposted bills:**
+```python
+from tms_client import TMSClient
+
+with TMSClient() as client:
+    # Search by order ID
+    bills = client.search_billing(order_id="5225404", company_id="TMS")
+    
+    # Search bills ready to process
+    ready_bills = client.search_billing(ready_to_process="Y", company_id="TMS2")
+    
+    # Search by billing user
+    user_bills = client.search_billing(
+        billing_user_id="cfaa-dsopr",
+        company_id="TMS"
+    )
+    
+    # Search with multiple filters and auto-pagination
+    all_bills = client.search_billing(
+        ready_to_process="N",
+        ship_date=">=t-30",
+        company_id="TMS2",
+        auto_paginate=True
+    )
+```
+
+**Get a single billing record:**
+```python
+bill = client.get_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    company_id="TMS",
+    include_users=True,
+    include_customer=True
+)
+print(f"Ready to process: {bill.get('ready_to_process')}")
+print(f"Billing user: {bill.get('billing_user_id')}")
+```
+
+**Update billing records:**
+```python
+# Mark bill as ready to process
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    ready_to_process=True,
+    company_id="TMS"
+)
+
+# Update billing user
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    billing_user_id="cfaa-dsopr",
+    company_id="TMS2"
+)
+
+# Update both fields at once
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    ready_to_process=True,
+    billing_user_id="cfaa-jthom",
+    company_id="TMS"
+)
+
+# Uncheck ready to bill using string
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    ready_to_process="N",
+    company_id="TMS"
+)
+```
+
+### Key Implementation Notes
+- Uses `GET /billing` for searching unposted bills
+- Uses `GET /billing/{id}` for retrieving a single bill
+- Uses `PUT /billing/update` (BillingService) for updates
+- `ready_to_process` accepts both boolean (True/False) and string ("Y"/"N") values
+- `billing_user_id` must be a valid user ID (max 10 characters, references users.id)
+- All other billing fields are preserved when updating
+- Supports auto-pagination for retrieving all results when there may be >100 records
+
+---
+
 ## [2026-01-XX] Settlement Transaction Date Updates
 
 ### Added

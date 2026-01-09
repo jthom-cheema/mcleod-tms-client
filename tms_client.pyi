@@ -529,6 +529,41 @@ class TMSClient:
         """Add a charge to an order."""
         ...
     
+    def search_billing(
+        self,
+        company_id: Optional[str] = None,
+        include_users: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+        **filters: Any,
+    ) -> List[Dict[str, Any]]:
+        """Search unposted billing records by various criteria. Supports filters like order_id, ready_to_process, billing_user_id, etc."""
+        ...
+    
+    def get_billing(
+        self,
+        billing_id: str,
+        company_id: Optional[str] = None,
+        include_users: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Get a single unposted billing record by ID."""
+        ...
+    
+    def update_billing(
+        self,
+        billing_id: str,
+        ready_to_process: Optional[Union[bool, str]] = None,
+        billing_user_id: Optional[str] = None,
+        company_id: Optional[str] = None,
+        include_users: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """Update billing record's ready_to_process flag and/or billing_user_id. Accepts bool/str for ready_to_process ('Y'/'N')."""
+        ...
+    
     def close(self) -> None:
         """Close the HTTP session."""
         ...

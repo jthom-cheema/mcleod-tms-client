@@ -1889,6 +1889,312 @@ class TMSClient:
 
         return return_rows
 
+    def search_billing(
+        self,
+        company_id: Optional[str] = None,
+        include_users: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+        **filters: Any,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search unposted billing records by various criteria.
+        
+        Retrieves a list of unposted billing records matching the given request parameters.
+        Supports any combination of fields from the billing table (e.g., order_id, 
+        ready_to_process, blnum, billing_user_id, etc.).
+        
+        Args:
+            company_id: Optional override for Company ID header
+            include_users: Whether to include user detail records with each invoice
+            include_customer: Whether to include customer details with each invoice
+            record_length: Optional page size (default 100, max 100)
+            record_offset: Optional offset (NOTE: API ignores this; use auto_paginate instead)
+            auto_paginate: When True, fetches all pages using cursor-based pagination 
+                with 'id > last_id'. Use this to get all results when there may be >100.
+            **filters: Search criteria from billing table. Examples:
+                - order_id: "5225404" or "5225404*" (wildcard)
+                - ready_to_process: "Y" or "N"
+                - billing_user_id: "cfaa-dsopr"
+                - blnum: "12345*" (wildcard pattern)
+                - ship_date: ">=t-100" (relative date)
+                - customer_id: "ACME"
+                
+        Returns:
+            List of RowBilling objects (unposted billing records) matching the criteria
+            
+        Examples:
+            >>> # Search by order ID
+            >>> bills = client.search_billing(order_id="5225404", company_id="TMS")
+            
+            >>> # Search bills ready to process
+            >>> ready_bills = client.search_billing(ready_to_process="Y", company_id="TMS2")
+            
+            >>> # Search by billing user
+            >>> user_bills = client.search_billing(
+            ...     billing_user_id="cfaa-dsopr",
+            ...     company_id="TMS"
+            ... )
+            
+            >>> # Search with multiple filters and auto-pagination
+            >>> all_bills = client.search_billing(
+            ...     ready_to_process="N",
+            ...     ship_date=">=t-30",
+            ...     company_id="TMS2",
+            ...     auto_paginate=True
+            ... )
+            
+            >>> # Include user and customer details
+            >>> bills = client.search_billing(
+            ...     order_id="5225404",
+            ...     include_users=True,
+            ...     include_customer=True,
+            ...     company_id="TMS"
+            ... )
+        """
+        import sys
+        
+        params: Dict[str, Any] = {}
+        
+        # Add optional parameters
+        if include_users is not None:
+            params["includeUsers"] = bool(include_users)
+        if include_customer is not None:
+            params["includeCustomer"] = bool(include_customer)
+        # Enforce 100-record pages by default for consistency
+        page_size = int(record_length) if record_length is not None else 100
+        params["recordLength"] = page_size
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+        
+        # Add any filters from billing table
+        params.update(filters)
+        
+        # Auto-pagination using cursor-based 'id > last_id'
+        if auto_paginate:
+            all_rows: List[Dict[str, Any]] = []
+            max_pages = 100  # Safety limit (10,000 records max)
+            last_id = None
+            
+            for page_num in range(1, max_pages + 1):
+                # Create params for this page
+                page_params = dict(params)
+                
+                # Add id filter to get next batch (skip first page)
+                if last_id is not None:
+                    page_params["id"] = f">{last_id}"
+                
+                page = self.get_json("/billing", company_id=company_id, params=page_params)
+                
+                if not isinstance(page, list) or len(page) == 0:
+                    break
+                
+                all_rows.extend(page)
+                
+                # Continue only when we got exactly the enforced page_size
+                if len(page) != page_size:
+                    if len(page) > page_size:
+                        print(
+                            f"WARNING: API ignored recordLength={page_size} and returned {len(page)} rows; "
+                            f"treating as last page.",
+                            file=sys.stderr,
+                        )
+                    break
+                
+                # Get the last id for next iteration
+                last_id = page[-1].get('id')
+                if not last_id:
+                    print(f"WARNING: No 'id' field in response, cannot paginate further", 
+                          file=sys.stderr)
+                    break
+            
+            return all_rows
+
+        # Single-page request (no auto-pagination)
+        return_rows = self.get_json("/billing", company_id=company_id, params=params)
+        if not isinstance(return_rows, list):
+            return []
+
+        # Enforce page_size on single-page calls for consistent pagination
+        if len(return_rows) > page_size:
+            print(
+                f"WARNING: API ignored recordLength={page_size} and returned {len(return_rows)} rows; "
+                f"trimming to first {page_size} for pagination consistency.",
+                file=sys.stderr,
+            )
+            return_rows = return_rows[:page_size]
+
+        return return_rows
+
+    def get_billing(
+        self,
+        billing_id: str,
+        company_id: Optional[str] = None,
+        include_users: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Get a single unposted billing record by ID.
+        
+        Retrieves the billing record identified by the given ID from the unposted
+        billing table.
+        
+        Args:
+            billing_id: The billing record ID (the 'id' field from billing)
+            company_id: Optional override for Company ID header
+            include_users: Whether to include user detail records (enteredUser, billingUser)
+            include_customer: Whether to include customer details
+            
+        Returns:
+            Dict containing the RowBilling object for the specified billing record
+            
+        Examples:
+            >>> # Get billing record
+            >>> bill = client.get_billing("zz1jas4t3sq180gCFAATS2", company_id="TMS")
+            
+            >>> # Get with user and customer details
+            >>> bill = client.get_billing(
+            ...     "zz1jas4t3sq180gCFAATS2",
+            ...     company_id="TMS",
+            ...     include_users=True,
+            ...     include_customer=True
+            ... )
+            >>> print(f"Ready to process: {bill.get('ready_to_process')}")
+            >>> print(f"Billing user: {bill.get('billing_user_id')}")
+        """
+        params: Dict[str, Any] = {}
+        
+        if include_users is not None:
+            params["includeUsers"] = bool(include_users)
+        if include_customer is not None:
+            params["includeCustomer"] = bool(include_customer)
+        
+        return self.get_json(f"/billing/{billing_id}", company_id=company_id, params=params)
+
+    def update_billing(
+        self,
+        billing_id: str,
+        ready_to_process: Optional[Union[bool, str]] = None,
+        billing_user_id: Optional[str] = None,
+        company_id: Optional[str] = None,
+        include_users: Optional[bool] = None,
+        include_customer: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        """
+        Update a billing record's ready_to_process flag and/or billing_user_id.
+        
+        Updates the "Ready to Bill" checkbox (ready_to_process) and/or the 
+        "Billing User" field (billing_user_id) on an unposted billing record.
+        
+        Args:
+            billing_id: The billing record ID to update (the 'id' field from billing)
+            ready_to_process: The "Ready to Bill" status. Can be:
+                - bool: True for "Y" (ready), False for "N" (not ready)
+                - str: "Y" or "N"
+                - None: Don't update this field
+            billing_user_id: The user ID for the billing user field (references users.id).
+                Must be a valid user ID (max 10 characters, e.g., "cfaa-dsopr").
+                None: Don't update this field
+            company_id: Optional override for Company ID header
+            include_users: Whether to include user details in the response
+            include_customer: Whether to include customer details in the response
+            
+        Returns:
+            Dict containing the updated RowBilling object from the API
+            
+        Raises:
+            ValueError: If neither ready_to_process nor billing_user_id is provided,
+                or if ready_to_process is not a valid value
+            
+        Examples:
+            >>> # Mark bill as ready to process
+            >>> updated = client.update_billing(
+            ...     "zz1jas4t3sq180gCFAATS2",
+            ...     ready_to_process=True,
+            ...     company_id="TMS"
+            ... )
+            
+            >>> # Update billing user
+            >>> updated = client.update_billing(
+            ...     "zz1jas4t3sq180gCFAATS2",
+            ...     billing_user_id="cfaa-dsopr",
+            ...     company_id="TMS2"
+            ... )
+            
+            >>> # Update both fields
+            >>> updated = client.update_billing(
+            ...     "zz1jas4t3sq180gCFAATS2",
+            ...     ready_to_process=True,
+            ...     billing_user_id="cfaa-jthom",
+            ...     company_id="TMS"
+            ... )
+            
+            >>> # Uncheck ready to bill using string
+            >>> updated = client.update_billing(
+            ...     "zz1jas4t3sq180gCFAATS2",
+            ...     ready_to_process="N",
+            ...     company_id="TMS"
+            ... )
+        """
+        # Validate inputs
+        if ready_to_process is None and billing_user_id is None:
+            raise ValueError("At least one of ready_to_process or billing_user_id must be provided")
+        
+        # Get the current billing record to preserve other fields
+        try:
+            current_bill = self.get_billing(billing_id, company_id=company_id)
+        except Exception as e:
+            raise ValueError(f"Could not retrieve billing record '{billing_id}': {e}")
+        
+        # Prepare payload with existing fields
+        payload = {
+            "__type": "billing",
+            "id": billing_id,
+            **{k: v for k, v in current_bill.items() if not k.startswith("__") and k != "id"}
+        }
+        
+        # Update ready_to_process
+        if ready_to_process is not None:
+            if isinstance(ready_to_process, bool):
+                payload["ready_to_process"] = "Y" if ready_to_process else "N"
+            elif isinstance(ready_to_process, str):
+                ready_to_process = ready_to_process.strip().upper()
+                if ready_to_process not in ("Y", "N"):
+                    raise ValueError(f"ready_to_process must be 'Y' or 'N', got '{ready_to_process}'")
+                payload["ready_to_process"] = ready_to_process
+            else:
+                raise ValueError(f"ready_to_process must be bool or str ('Y'/'N'), got {type(ready_to_process)}")
+        
+        # Update billing_user_id
+        if billing_user_id is not None:
+            billing_user_id = str(billing_user_id).strip()
+            if len(billing_user_id) > 10:
+                raise ValueError(f"billing_user_id must be 10 characters or less, got {len(billing_user_id)} characters")
+            payload["billing_user_id"] = billing_user_id
+        
+        headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        params = {}
+        if include_users is not None:
+            params["includeUsers"] = bool(include_users)
+        if include_customer is not None:
+            params["includeCustomer"] = bool(include_customer)
+        
+        response = self.put(
+            "/billing/update",
+            json=payload,
+            headers=headers,
+            company_id=company_id,
+            params=params if params else None
+        )
+        
+        return response.json()
+
     # Convenience methods for common operations
     def get_available_images(self, row_type: str, row_id: str, company_id: Optional[str] = None) -> Dict[str, Any]:
         """

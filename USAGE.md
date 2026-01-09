@@ -568,6 +568,92 @@ for bill in bills:
 
 **Note on Pagination**: The billing history endpoint returns a maximum of 100 results per call and does not support offset-based pagination (`recordOffset` is ignored). To retrieve all results, use `auto_paginate=True`, which uses cursor-based pagination with the `id` field to fetch all pages automatically.
 
+### Unposted Billing (Billing Records)
+```python
+from tms_client import TMSClient
+
+# Search unposted bills by order ID
+bills = client.search_billing(order_id="5225404", company_id="TMS")
+
+# Search bills ready to process
+ready_bills = client.search_billing(ready_to_process="Y", company_id="TMS2")
+
+# Search by billing user
+user_bills = client.search_billing(
+    billing_user_id="cfaa-dsopr",
+    company_id="TMS"
+)
+
+# Search with multiple filters
+bills = client.search_billing(
+    ready_to_process="N",
+    ship_date=">=t-30",
+    customer_id="ACME",
+    company_id="TMS2"
+)
+
+# Auto-paginate to get all results
+all_bills = client.search_billing(
+    ready_to_process="Y",
+    company_id="TMS",
+    auto_paginate=True
+)
+
+# Get a single billing record
+bill = client.get_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    company_id="TMS",
+    include_users=True,
+    include_customer=True
+)
+
+# Update Ready to Bill checkbox
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    ready_to_process=True,  # or False, or "Y", or "N"
+    company_id="TMS"
+)
+
+# Update Billing User field
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    billing_user_id="cfaa-dsopr",
+    company_id="TMS2"
+)
+
+# Update both fields at once
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    ready_to_process=True,
+    billing_user_id="cfaa-jthom",
+    company_id="TMS"
+)
+
+# Process results
+for bill in bills:
+    print(f"Order: {bill.get('order_id')}")
+    print(f"Ready to process: {bill.get('ready_to_process')}")
+    print(f"Billing user: {bill.get('billing_user_id')}")
+    print(f"BOL: {bill.get('blnum')}")
+```
+
+**Supported Filters for `search_billing()`**: Any field from the `billing` table, including:
+- `order_id`: Order ID (e.g., "5225404" or "5225404*" for wildcard)
+- `ready_to_process`: "Y" or "N"
+- `billing_user_id`: User ID (e.g., "cfaa-dsopr")
+- `blnum`: Bill of Lading number (supports wildcards like "12345*")
+- `customer_id`: Customer ID
+- `ship_date`: Relative date (e.g., ">=t-30")
+- And many more...
+
+**`ready_to_process` Values for `update_billing()`**:
+| Value | Description |
+|-------|-------------|
+| `True` or `"Y"` | Ready to bill (checkbox checked) |
+| `False` or `"N"` | Not ready to bill (checkbox unchecked) |
+
+**Note**: `search_billing()` searches unposted bills (bills that haven't been posted to history yet). Use `search_billing_history()` for bills that have already been posted.
+
 ### Miscellaneous Billing History
 ```python
 from datetime import datetime, timedelta

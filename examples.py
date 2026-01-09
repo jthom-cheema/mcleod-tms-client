@@ -1163,9 +1163,173 @@ def example_billing_history_search():
         print("Note: Without auto_paginate, you'd only get the first 100 results")
         
         # Display sample bill structure
-        if yesterday_bills:
+
+
+def example_billing_updates():
+    """Search and update unposted billing records.
+    
+    Demonstrates searching unposted bills, retrieving individual bills,
+    and updating the Ready to Bill checkbox and Billing User field.
+    """
+    with TMSClient("username", "password") as client:
+        company = "TMS"
+        
+        # Search for bills ready to process
+        print("=== Bills Ready to Process ===")
+        ready_bills = client.search_billing(
+            ready_to_process="Y",
+            company_id=company,
+            record_length=5
+        )
+        print(f"Found {len(ready_bills)} bills ready to process")
+        
+        if not ready_bills:
+            print("No bills found. Trying different search...")
+            # Search by order ID instead
+            bills = client.search_billing(
+                order_id="5225404",
+                company_id=company
+            )
+            if bills:
+                ready_bills = bills
+            else:
+                print("No bills found to test with")
+                return
+        
+        # Get details of first bill
+        bill = ready_bills[0]
+        billing_id = bill.get("id")
+        order_id = bill.get("order_id")
+        original_ready = bill.get("ready_to_process")
+        original_user = bill.get("billing_user_id")
+        
+        print(f"\n=== Bill Details ===")
+        print(f"Billing ID: {billing_id}")
+        print(f"Order ID: {order_id}")
+        print(f"Ready to process: {original_ready}")
+        print(f"Billing user: {original_user}")
+        
+        # Get full bill details
+        print(f"\n=== Get Full Bill Details ===")
+        full_bill = client.get_billing(
+            billing_id,
+            company_id=company,
+            include_users=True,
+            include_customer=True
+        )
+        print(f"Retrieved bill {billing_id}")
+        print(f"Customer: {full_bill.get('customer_id')}")
+        print(f"BOL: {full_bill.get('blnum')}")
+        
+        # Update Ready to Bill checkbox
+        print(f"\n=== Update Ready to Process ===")
+        print(f"Current: {original_ready}")
+        
+        # Uncheck (set to False)
+        updated = client.update_billing(
+            billing_id,
+            ready_to_process=False,
+            company_id=company
+        )
+        print(f"Updated to: {updated.get('ready_to_process')}")
+        
+        # Verify
+        verify = client.get_billing(billing_id, company_id=company)
+        print(f"Verified: {verify.get('ready_to_process')}")
+        
+        # Check again (set to True)
+        updated = client.update_billing(
+            billing_id,
+            ready_to_process=True,
+            company_id=company
+        )
+        print(f"Updated to: {updated.get('ready_to_process')}")
+        
+        # Update using string format
+        updated = client.update_billing(
+            billing_id,
+            ready_to_process="N",
+            company_id=company
+        )
+        print(f"Updated to 'N': {updated.get('ready_to_process')}")
+        
+        # Restore original
+        if original_ready:
+            client.update_billing(
+                billing_id,
+                ready_to_process=True,
+                company_id=company
+            )
+        print(f"Restored to original: {original_ready}")
+        
+        # Update Billing User
+        print(f"\n=== Update Billing User ===")
+        print(f"Current user: {original_user}")
+        
+        test_user = "cfaa-jthom"
+        updated = client.update_billing(
+            billing_id,
+            billing_user_id=test_user,
+            company_id=company
+        )
+        print(f"Updated to: {updated.get('billing_user_id')}")
+        
+        # Verify
+        verify = client.get_billing(billing_id, company_id=company)
+        print(f"Verified: {verify.get('billing_user_id')}")
+        
+        # Restore original user
+        if original_user != test_user:
+            client.update_billing(
+                billing_id,
+                billing_user_id=original_user,
+                company_id=company
+            )
+            print(f"Restored to original user: {original_user}")
+        
+        # Update both fields at once
+        print(f"\n=== Update Both Fields ===")
+        updated = client.update_billing(
+            billing_id,
+            ready_to_process=True,
+            billing_user_id=test_user,
+            company_id=company
+        )
+        print(f"Ready to process: {updated.get('ready_to_process')}")
+        print(f"Billing user: {updated.get('billing_user_id')}")
+        
+        # Restore original values
+        client.update_billing(
+            billing_id,
+            ready_to_process=original_ready,
+            billing_user_id=original_user,
+            company_id=company
+        )
+        print(f"Restored original values")
+        
+        # Search with multiple filters
+        print(f"\n=== Multi-Filter Search ===")
+        filtered_bills = client.search_billing(
+            ready_to_process="N",
+            ship_date=">=t-30",
+            company_id=company,
+            record_length=10
+        )
+        print(f"Found {len(filtered_bills)} bills not ready, shipped in last 30 days")
+        
+        # Search by billing user
+        print(f"\n=== Search by Billing User ===")
+        user_bills = client.search_billing(
+            billing_user_id="cfaa-dsopr",
+            company_id=company,
+            record_length=5
+        )
+        print(f"Found {len(user_bills)} bills for billing user 'cfaa-dsopr'")
+        
+        # Display sample bill structure
+        if ready_bills:
             print("\n=== Sample Bill Structure ===")
-            sample = yesterday_bills[0]
+            sample = ready_bills[0]
             print("Available fields:")
             for key in sorted(sample.keys())[:20]:  # Show first 20 fields
                 value = sample[key]
@@ -1693,5 +1857,6 @@ if __name__ == "__main__":
     print("- example_user_search()")
     print("- example_update_load()")
     print("- example_billing_history_search()")
+    print("- example_billing_updates()")
     print("- example_settlement_search()")
     print("- example_authentication_methods()")

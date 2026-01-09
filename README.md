@@ -645,6 +645,50 @@ with TMSClient("username", "password") as client:
 <｜tool▁calls▁begin｜><｜tool▁call▁begin｜>
 run_terminal_cmd
 
+### Unposted Billing Records
+
+Search and update unposted billing records (bills that haven't been posted to history yet):
+
+```python
+from tms_client import TMSClient
+
+with TMSClient() as client:
+    # Search by order ID
+    bills = client.search_billing(order_id="5225404", company_id="TMS")
+    
+    # Search bills ready to process
+    ready_bills = client.search_billing(ready_to_process="Y", company_id="TMS2")
+    
+    # Get a single billing record
+    bill = client.get_billing("zz1jas4t3sq180gCFAATS2", company_id="TMS")
+    
+    # Update Ready to Bill checkbox
+    updated = client.update_billing(
+        "zz1jas4t3sq180gCFAATS2",
+        ready_to_process=True,  # or False, or "Y", or "N"
+        company_id="TMS"
+    )
+    
+    # Update Billing User field
+    updated = client.update_billing(
+        "zz1jas4t3sq180gCFAATS2",
+        billing_user_id="cfaa-dsopr",
+        company_id="TMS2"
+    )
+    
+    # Update both fields at once
+    updated = client.update_billing(
+        "zz1jas4t3sq180gCFAATS2",
+        ready_to_process=True,
+        billing_user_id="cfaa-jthom",
+        company_id="TMS"
+    )
+```
+
+**Supported Filters**: `order_id`, `ready_to_process`, `billing_user_id`, `blnum`, `customer_id`, `ship_date`, and many more from the billing table.
+
+**Note**: Use `search_billing()` for unposted bills. Use `search_billing_history()` for bills that have already been posted.
+
 ### Freight Billing History Search
 
 ```python
