@@ -621,11 +621,19 @@ updated = client.update_billing(
     company_id="TMS2"
 )
 
-# Update both fields at once
+# Update Additional Notes field
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    additional_notes="Special handling required",
+    company_id="TMS"
+)
+
+# Update all three fields at once
 updated = client.update_billing(
     "zz1jas4t3sq180gCFAATS2",
     ready_to_process=True,
     billing_user_id="cfaa-jthom",
+    additional_notes="Customer requested rush delivery",
     company_id="TMS"
 )
 
@@ -651,6 +659,12 @@ for bill in bills:
 |-------|-------------|
 | `True` or `"Y"` | Ready to bill (checkbox checked) |
 | `False` or `"N"` | Not ready to bill (checkbox unchecked) |
+
+**`additional_notes` Field**:
+- Maps to the `addlnotes1` field in the billing table
+- Maximum length: 200 characters
+- Can be updated alone or with other fields
+- Set to `None` or empty string to clear the field
 
 **Note**: `search_billing()` searches unposted bills (bills that haven't been posted to history yet). Use `search_billing_history()` for bills that have already been posted.
 

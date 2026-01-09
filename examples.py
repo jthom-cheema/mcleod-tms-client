@@ -1287,22 +1287,51 @@ def example_billing_updates():
             )
             print(f"Restored to original user: {original_user}")
         
-        # Update both fields at once
-        print(f"\n=== Update Both Fields ===")
+        # Update Additional Notes
+        print(f"\n=== Update Additional Notes ===")
+        original_notes = full_bill.get('addlnotes1', '')
+        print(f"Current notes: {original_notes or '(empty)'}")
+        
+        test_notes = "Test notes from API update"
+        updated = client.update_billing(
+            billing_id,
+            additional_notes=test_notes,
+            company_id=company
+        )
+        print(f"Updated to: {updated.get('addlnotes1', 'N/A')}")
+        
+        # Verify
+        verify = client.get_billing(billing_id, company_id=company)
+        print(f"Verified: {verify.get('addlnotes1', 'N/A')}")
+        
+        # Restore original notes
+        if original_notes != test_notes:
+            client.update_billing(
+                billing_id,
+                additional_notes=original_notes if original_notes else None,
+                company_id=company
+            )
+            print(f"Restored to original notes: {original_notes or '(empty)'}")
+        
+        # Update all three fields at once
+        print(f"\n=== Update All Three Fields ===")
         updated = client.update_billing(
             billing_id,
             ready_to_process=True,
             billing_user_id=test_user,
+            additional_notes="Multi-field update test",
             company_id=company
         )
         print(f"Ready to process: {updated.get('ready_to_process')}")
         print(f"Billing user: {updated.get('billing_user_id')}")
+        print(f"Additional notes: {updated.get('addlnotes1', 'N/A')}")
         
         # Restore original values
         client.update_billing(
             billing_id,
             ready_to_process=original_ready,
             billing_user_id=original_user,
+            additional_notes=original_notes if original_notes else None,
             company_id=company
         )
         print(f"Restored original values")

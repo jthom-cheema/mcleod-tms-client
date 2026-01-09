@@ -9,7 +9,7 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 ### Added
 - **`search_billing()`** - Search unposted billing records by various criteria
 - **`get_billing()`** - Get a single unposted billing record by ID
-- **`update_billing()`** - Update `ready_to_process` (Ready to Bill checkbox) and/or `billing_user_id` (Billing User field)
+- **`update_billing()`** - Update `ready_to_process` (Ready to Bill checkbox), `billing_user_id` (Billing User field), and/or `additional_notes` (Additional Notes field)
 
 ### What It Does
 
@@ -17,7 +17,7 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 **`get_billing()`**: Retrieves a single unposted billing record by its ID. Useful for getting full details of a specific bill before updating it.
 
-**`update_billing()`**: Updates the "Ready to Bill" checkbox (`ready_to_process`) and/or the "Billing User" field (`billing_user_id`) on unposted billing records. The `ready_to_process` field accepts both boolean values (True/False) and string values ("Y"/"N"), automatically converting to the correct format. All other billing fields are preserved during the update.
+**`update_billing()`**: Updates the "Ready to Bill" checkbox (`ready_to_process`), the "Billing User" field (`billing_user_id`), and/or the "Additional Notes" field (`additional_notes` / `addlnotes1`) on unposted billing records. The `ready_to_process` field accepts both boolean values (True/False) and string values ("Y"/"N"), automatically converting to the correct format. The `additional_notes` field supports up to 200 characters. All other billing fields are preserved during the update.
 
 ### Usage
 
@@ -75,11 +75,19 @@ updated = client.update_billing(
     company_id="TMS2"
 )
 
-# Update both fields at once
+# Update additional notes
+updated = client.update_billing(
+    "zz1jas4t3sq180gCFAATS2",
+    additional_notes="Special handling required",
+    company_id="TMS"
+)
+
+# Update all three fields at once
 updated = client.update_billing(
     "zz1jas4t3sq180gCFAATS2",
     ready_to_process=True,
     billing_user_id="cfaa-jthom",
+    additional_notes="Customer requested rush delivery",
     company_id="TMS"
 )
 
@@ -97,6 +105,7 @@ updated = client.update_billing(
 - Uses `PUT /billing/update` (BillingService) for updates
 - `ready_to_process` accepts both boolean (True/False) and string ("Y"/"N") values
 - `billing_user_id` must be a valid user ID (max 10 characters, references users.id)
+- `additional_notes` maps to the `addlnotes1` field (VARCHAR(200), max 200 characters)
 - All other billing fields are preserved when updating
 - Supports auto-pagination for retrieving all results when there may be >100 records
 

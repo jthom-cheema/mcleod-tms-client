@@ -676,16 +676,26 @@ with TMSClient() as client:
         company_id="TMS2"
     )
     
-    # Update both fields at once
+    # Update Additional Notes field
+    updated = client.update_billing(
+        "zz1jas4t3sq180gCFAATS2",
+        additional_notes="Special handling required",
+        company_id="TMS"
+    )
+    
+    # Update all three fields at once
     updated = client.update_billing(
         "zz1jas4t3sq180gCFAATS2",
         ready_to_process=True,
         billing_user_id="cfaa-jthom",
+        additional_notes="Customer requested rush delivery",
         company_id="TMS"
     )
 ```
 
 **Supported Filters**: `order_id`, `ready_to_process`, `billing_user_id`, `blnum`, `customer_id`, `ship_date`, and many more from the billing table.
+
+**Update Fields**: `update_billing()` supports updating `ready_to_process` (bool/str), `billing_user_id` (str, max 10 chars), and `additional_notes` (str, max 200 chars).
 
 **Note**: Use `search_billing()` for unposted bills. Use `search_billing_history()` for bills that have already been posted.
 

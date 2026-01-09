@@ -557,11 +557,12 @@ class TMSClient:
         billing_id: str,
         ready_to_process: Optional[Union[bool, str]] = None,
         billing_user_id: Optional[str] = None,
+        additional_notes: Optional[str] = None,
         company_id: Optional[str] = None,
         include_users: Optional[bool] = None,
         include_customer: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """Update billing record's ready_to_process flag and/or billing_user_id. Accepts bool/str for ready_to_process ('Y'/'N')."""
+        """Update billing record's ready_to_process flag, billing_user_id, and/or additional_notes. Accepts bool/str for ready_to_process ('Y'/'N'). additional_notes max 200 chars."""
         ...
     
     def close(self) -> None:

@@ -2078,15 +2078,17 @@ class TMSClient:
         billing_id: str,
         ready_to_process: Optional[Union[bool, str]] = None,
         billing_user_id: Optional[str] = None,
+        additional_notes: Optional[str] = None,
         company_id: Optional[str] = None,
         include_users: Optional[bool] = None,
         include_customer: Optional[bool] = None,
     ) -> Dict[str, Any]:
         """
-        Update a billing record's ready_to_process flag and/or billing_user_id.
+        Update a billing record's ready_to_process flag, billing_user_id, and/or additional_notes.
         
-        Updates the "Ready to Bill" checkbox (ready_to_process) and/or the 
-        "Billing User" field (billing_user_id) on an unposted billing record.
+        Updates the "Ready to Bill" checkbox (ready_to_process), the "Billing User" field 
+        (billing_user_id), and/or the "Additional Notes" field (addlnotes1) on an unposted 
+        billing record.
         
         Args:
             billing_id: The billing record ID to update (the 'id' field from billing)
@@ -2097,6 +2099,8 @@ class TMSClient:
             billing_user_id: The user ID for the billing user field (references users.id).
                 Must be a valid user ID (max 10 characters, e.g., "cfaa-dsopr").
                 None: Don't update this field
+            additional_notes: The "Additional Notes" field (addlnotes1). Max 200 characters.
+                None: Don't update this field
             company_id: Optional override for Company ID header
             include_users: Whether to include user details in the response
             include_customer: Whether to include customer details in the response
@@ -2105,8 +2109,8 @@ class TMSClient:
             Dict containing the updated RowBilling object from the API
             
         Raises:
-            ValueError: If neither ready_to_process nor billing_user_id is provided,
-                or if ready_to_process is not a valid value
+            ValueError: If none of ready_to_process, billing_user_id, or additional_notes is provided,
+                or if ready_to_process is not a valid value, or if additional_notes exceeds 200 characters
             
         Examples:
             >>> # Mark bill as ready to process
@@ -2123,11 +2127,19 @@ class TMSClient:
             ...     company_id="TMS2"
             ... )
             
-            >>> # Update both fields
+            >>> # Update additional notes
+            >>> updated = client.update_billing(
+            ...     "zz1jas4t3sq180gCFAATS2",
+            ...     additional_notes="Special handling required",
+            ...     company_id="TMS"
+            ... )
+            
+            >>> # Update all three fields
             >>> updated = client.update_billing(
             ...     "zz1jas4t3sq180gCFAATS2",
             ...     ready_to_process=True,
             ...     billing_user_id="cfaa-jthom",
+            ...     additional_notes="Customer requested rush delivery",
             ...     company_id="TMS"
             ... )
             
@@ -2139,8 +2151,8 @@ class TMSClient:
             ... )
         """
         # Validate inputs
-        if ready_to_process is None and billing_user_id is None:
-            raise ValueError("At least one of ready_to_process or billing_user_id must be provided")
+        if ready_to_process is None and billing_user_id is None and additional_notes is None:
+            raise ValueError("At least one of ready_to_process, billing_user_id, or additional_notes must be provided")
         
         # Get the current billing record to preserve other fields
         try:
@@ -2173,6 +2185,13 @@ class TMSClient:
             if len(billing_user_id) > 10:
                 raise ValueError(f"billing_user_id must be 10 characters or less, got {len(billing_user_id)} characters")
             payload["billing_user_id"] = billing_user_id
+        
+        # Update additional_notes (addlnotes1)
+        if additional_notes is not None:
+            additional_notes = str(additional_notes).strip()
+            if len(additional_notes) > 200:
+                raise ValueError(f"additional_notes must be 200 characters or less, got {len(additional_notes)} characters")
+            payload["addlnotes1"] = additional_notes
         
         headers = {
             "Content-Type": "application/json",
