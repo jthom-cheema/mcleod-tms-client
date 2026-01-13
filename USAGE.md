@@ -367,7 +367,8 @@ for deduction in history:
 
 ### Settlement History & Payment Confirmation
 ```python
-# Simple payment check - returns record if paid, None if not
+# Simple payment check - returns the most recent *non-void* record if paid, None if not
+# (settlement history can contain multiple records if a payment was voided and re-issued)
 payment = client.is_movement_paid("1234721", company_id="TMS2")
 
 if payment:

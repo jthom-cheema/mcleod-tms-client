@@ -158,6 +158,28 @@ class TMSClient:
         """
         ...
 
+    def search_table_rows(
+        self,
+        table: str,
+        filters: Optional[Dict[str, Any]] = None,
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Search a TableRowService table via GET /{table}/search."""
+        ...
+
+    def get_pay_rate_groups(
+        self,
+        company_id: Optional[str] = None,
+        auto_paginate: bool = True,
+        record_length: int = 250,
+    ) -> List[Dict[str, Any]]:
+        """Get all pay rate groups (typically drs_payrate_group)."""
+        ...
+
     # Search helpers
     def search_customers(
         self,

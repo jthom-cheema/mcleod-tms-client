@@ -356,6 +356,13 @@ updated = client.update_deduction_status("zz1j7hpdj951c0gCFAATS3", "N", company_
 
 ---
 
+## [2026-01-13] Settlement Payment Confirmation Fix
+
+### Fixed
+- **`is_movement_paid()`** now checks **all** settlement history rows for a movement and returns the **most recent non-void** record (previously it only inspected the first record, which could be voided).
+
+---
+
 ## [2025-12-19] Settlement History & Payment Confirmation
 
 ### Added

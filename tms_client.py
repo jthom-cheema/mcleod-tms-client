@@ -602,6 +602,134 @@ class TMSClient:
         return response.json()
     
     # Search helpers
+    def search_table_rows(
+        self,
+        table: str,
+        filters: Optional[Dict[str, Any]] = None,
+        company_id: Optional[str] = None,
+        order_by: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search a TableRowService table via ``GET /{table}/search``.
+
+        This is useful for "table row service" tables that are not covered by the
+        first-class McLeod endpoints (like ``/orders/search``). Filters are passed
+        as query params (no table prefixes).
+
+        Args:
+            table: Table name, e.g. "driver_extra_pay" or "drs_payrate_group"
+            filters: Mapping of field -> value to filter by. Wildcards (``*``)
+                and relative date expressions (``t-30``) may be supported by the API.
+            company_id: Optional override for Company ID header.
+            order_by: Optional order by expression.
+            record_length: Optional page size.
+            record_offset: Optional page offset (ignored if auto_paginate is True).
+            auto_paginate: When True, fetches all pages by incrementing recordOffset.
+
+        Returns:
+            List of row dictionaries.
+        """
+        if not table or not str(table).strip():
+            raise ValueError("table is required")
+
+        table_name = str(table).strip().lstrip("/")
+        endpoint = f"/{table_name}/search"
+
+        # Auto-pagination using offset-based pagination
+        if auto_paginate:
+            all_rows: List[Dict[str, Any]] = []
+            page_size = int(record_length) if record_length is not None else 250
+            max_pages = 2000  # Safety limit (500k rows max at 250/page)
+            offset = 0
+
+            for _ in range(max_pages):
+                page_results = self.search_table_rows(
+                    table=table_name,
+                    filters=filters,
+                    company_id=company_id,
+                    order_by=order_by,
+                    record_length=page_size,
+                    record_offset=offset,
+                    auto_paginate=False,
+                )
+
+                if not page_results:
+                    break
+
+                all_rows.extend(page_results)
+
+                # If we got fewer results than requested, we're done
+                if len(page_results) < page_size:
+                    break
+
+                offset += page_size
+
+            return all_rows
+
+        # Single-page request
+        params: Dict[str, Any] = dict(filters or {})
+
+        # Sorting and pagination
+        if order_by:
+            params["orderBy"] = order_by
+        if record_length is not None:
+            params["recordLength"] = int(record_length)
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        results = self.get_json(endpoint, company_id=company_id, params=params)
+        return results if isinstance(results, list) else []
+
+    def get_pay_rate_groups(
+        self,
+        company_id: Optional[str] = None,
+        auto_paginate: bool = True,
+        record_length: int = 250,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all pay rate groups.
+
+        In McLeod this is typically stored in the ``drs_payrate_group`` table (CHAR(8) id).
+        This uses TableRowService search endpoints under the hood.
+        """
+        candidate_tables = ("drs_payrate_group", "pay_rate_group", "payrate_group")
+        last_error: Optional[Exception] = None
+
+        for table in candidate_tables:
+            # First attempt: wildcard id fetch (common for CHAR(8) code tables)
+            try:
+                rows = self.search_table_rows(
+                    table=table,
+                    filters={"id": "*"},
+                    company_id=company_id,
+                    record_length=record_length,
+                    auto_paginate=auto_paginate,
+                )
+                if isinstance(rows, list) and rows:
+                    return rows
+            except Exception as e:
+                last_error = e
+
+            # Second attempt: no filters (some APIs don't accept wildcard "id")
+            try:
+                rows = self.search_table_rows(
+                    table=table,
+                    filters={},
+                    company_id=company_id,
+                    record_length=record_length,
+                    auto_paginate=auto_paginate,
+                )
+                if isinstance(rows, list) and rows:
+                    return rows
+            except Exception as e:
+                last_error = e
+
+        attempted = ", ".join([f"/{t}/search" for t in candidate_tables])
+        raise Exception(f"Failed to fetch pay rate groups. Tried: {attempted}. Last error: {last_error}")
+
     def search_orders(
         self,
         filters: Dict[str, Any],
@@ -3317,7 +3445,7 @@ class TMSClient:
         Check if a movement has been paid by looking up settlement history.
 
         This is the cleanest way to confirm payment status for a movement.
-        Returns the settlement history record if paid, None if not yet paid.
+        Returns the (most recent) non-void settlement history record if paid, None if not yet paid.
 
         Args:
             movement_id: The movement ID to check (e.g., "1234721" or 1234721)
@@ -3354,17 +3482,42 @@ class TMSClient:
         history = self.search_settlement_history(
             filters={"drs_settle_hist.movement_id": str(movement_id)},
             company_id=company_id,
+            record_length=200,
         )
         
-        if history:
-            # Return the first (and typically only) record
-            record = history[0]
-            # Check if voided
-            if record.get("is_void"):
-                return None
-            return record
-        
-        return None
+        if not history:
+            return None
+
+        def _boolish(v: Any) -> bool:
+            if isinstance(v, bool):
+                return v
+            if v is None:
+                return False
+            if isinstance(v, (int, float)):
+                return v != 0
+            if isinstance(v, str):
+                s = v.strip().lower()
+                return s in ("y", "yes", "true", "t", "1")
+            return bool(v)
+
+        def _pay_sort_key(rec: Dict[str, Any]) -> tuple[int, int]:
+            # pay_date format commonly looks like: 20251126000000-0800
+            pay_date = rec.get("pay_date") or ""
+            digits = "".join(ch for ch in str(pay_date) if ch.isdigit())
+            dt = int(digits[:14]) if len(digits) >= 14 else 0
+            rid = rec.get("id")
+            try:
+                rid_i = int(rid) if rid is not None else 0
+            except (TypeError, ValueError):
+                rid_i = 0
+            return (dt, rid_i)
+
+        # The API can return multiple settlements for a movement (e.g., first voided then re-paid).
+        non_void = [rec for rec in history if not _boolish(rec.get("is_void"))]
+        if not non_void:
+            return None
+
+        return max(non_void, key=_pay_sort_key)
 
     def close(self) -> None:
         """Close the session."""
