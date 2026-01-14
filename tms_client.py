@@ -3,6 +3,7 @@ import sys
 import base64
 import requests
 import json
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Optional, Dict, Any, Union, List
@@ -10,6 +11,8 @@ from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -241,6 +244,112 @@ class TMSClient:
         """
         response = self.get(endpoint, company_id=company_id, **kwargs)
         return response.json()
+
+    @staticmethod
+    def _get_row_value(row: Dict[str, Any], key: str) -> Any:
+        """
+        Best-effort extraction of a value from a (possibly nested) API row.
+
+        Supports:
+        - exact key match: row["movement_id"]
+        - last-segment match for dotted keys: filters like "drs_deduct_hist.movement_id"
+          may come back as "movement_id"
+        - nested object match: filters like "movement.id" may come back as row["movement"]["id"]
+        """
+        if not isinstance(row, dict) or not key:
+            return None
+
+        if key in row:
+            return row.get(key)
+
+        if "." not in key:
+            return row.get(key)
+
+        prefix, field = key.rsplit(".", 1)
+
+        # Common: API returns unprefixed field names (movement_id) even if filters are prefixed
+        if field in row:
+            return row.get(field)
+
+        # Common: API returns nested objects (movement: {id: ...})
+        nested = row.get(prefix)
+        if isinstance(nested, dict) and field in nested:
+            return nested.get(field)
+
+        return None
+
+    @staticmethod
+    def _is_simple_equality_filter_value(value: Any) -> bool:
+        """
+        We can reliably enforce only simple equality filters client-side.
+
+        We intentionally do NOT try to interpret wildcards ("*") or comparator/date
+        expressions (">=t-30") as that would require implementing server semantics.
+        """
+        if value is None:
+            return True
+        if isinstance(value, (int, float, bool)):
+            return True
+        if isinstance(value, str):
+            v = value.strip()
+            if not v:
+                return True
+            # Wildcards / comparator-style expressions / ranges: skip enforcing
+            if "*" in v:
+                return False
+            if v.startswith((">=", "<=", ">", "<")):
+                return False
+            return True
+        return False
+
+    def _apply_client_side_filters_and_paging(
+        self,
+        rows: List[Dict[str, Any]],
+        filters: Optional[Dict[str, Any]] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        discard_rows_missing_filtered_field: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """
+        Safety net for endpoints that ignore server-side filtering/paging.
+        """
+        if not isinstance(rows, list) or not rows:
+            return []
+
+        filtered = rows
+        if filters:
+            for key, expected in filters.items():
+                if not self._is_simple_equality_filter_value(expected):
+                    continue
+                expected_str = None if expected is None else str(expected)
+                new_filtered: List[Dict[str, Any]] = []
+                for r in filtered:
+                    actual = self._get_row_value(r, str(key))
+                    # If the field doesn't exist in the row, decide based on strictness.
+                    # For high-risk endpoints (like deductions history), missing linkage fields
+                    # must be treated as untrusted and discarded.
+                    if actual is None:
+                        if discard_rows_missing_filtered_field:
+                            continue
+                        new_filtered.append(r)
+                        continue
+                    if expected_str is None:
+                        if actual is None:
+                            new_filtered.append(r)
+                    else:
+                        if str(actual) == expected_str:
+                            new_filtered.append(r)
+                filtered = new_filtered
+
+        if record_offset is not None:
+            start = max(0, int(record_offset))
+            filtered = filtered[start:]
+
+        if record_length is not None:
+            length = max(0, int(record_length))
+            filtered = filtered[:length]
+
+        return filtered
     
     def get_load_json(self, order_id: Union[str, int], company_id: Optional[str] = None) -> Dict[Any, Any]:
         """
@@ -3258,12 +3367,56 @@ class TMSClient:
         if record_offset is not None:
             params["recordOffset"] = int(record_offset)
 
-        # Note: The endpoint is /deductions/history (not /deductions/history/search)
-        # IMPORTANT: This endpoint may require Basic Auth instead of API key
-        # If API key auth fails, we'll catch and provide a helpful error
+        # IMPORTANT: This endpoint requires Basic Auth on many servers.
+        # Also: some server versions ignore query filters/paging on /deductions/history.
+        # We'll first try /deductions/history/search (if available), then fall back,
+        # and finally apply a client-side safety filter/limit.
         try:
-            results = self.get_json("/deductions/history", company_id=company_id, params=params)
-            return results if isinstance(results, list) else []
+            # Prefer the search endpoint if it exists (consistent with /settlements/history/search)
+            try_endpoints = ("/deductions/history/search", "/deductions/history")
+            last_exc: Optional[Exception] = None
+            results: Any = []
+            used_endpoint: Optional[str] = None
+            for ep in try_endpoints:
+                try:
+                    results = self.get_json(ep, company_id=company_id, params=params)
+                    last_exc = None
+                    used_endpoint = ep
+                    break
+                except Exception as inner:
+                    last_exc = inner
+                    # If search endpoint doesn't exist, fall back
+                    if "HTTP 404" in str(inner) and ep.endswith("/search"):
+                        continue
+                    raise
+            if last_exc is not None:
+                raise last_exc
+
+            rows = results if isinstance(results, list) else []
+
+            # Hard safety cap: if the server ignored filters/paging, it may return a massive
+            # unbounded list. When the caller asked for a bounded page (record_length),
+            # treat oversized responses as untrusted and return [].
+            # (Correctness-first: "no data" is safer than "wrong data".)
+            untrusted_hard_cap = 1000
+            if record_length is not None and filters and len(rows) > untrusted_hard_cap:
+                logger.warning(
+                    "Untrusted deductions history response: endpoint=%s rows=%s filters=%s recordLength=%s. "
+                    "Assuming server ignored filters/paging; returning [].",
+                    used_endpoint,
+                    len(rows),
+                    list(filters.keys()),
+                    record_length,
+                )
+                return []
+
+            return self._apply_client_side_filters_and_paging(
+                rows=rows,
+                filters=filters,
+                record_length=record_length,
+                record_offset=record_offset,
+                discard_rows_missing_filtered_field=True,
+            )
         except Exception as e:
             error_msg = str(e)
             # Check if it's a 401 auth error and we're using API key
@@ -3332,6 +3485,8 @@ class TMSClient:
                 filters={"drs_deduct_hist.movement_id": str(movement_id)},
                 company_id=company_id,
                 order_by=order_by,
+                # Keep history lookups bounded; server-side paging may be unreliable.
+                record_length=500,
             )
             return history
         

@@ -417,6 +417,24 @@ history = client.search_settlement_history(
 
 ---
 
+## [2026-01-14] Deductions History Safety Hardening (Correctness-First)
+
+### Changed
+- **`search_deductions_history()` is now defensive by default**:
+  - Tries `GET /deductions/history/search` first (if the API supports it), then falls back to `GET /deductions/history`.
+  - Applies **strict client-side filtering** for simple equality filters (e.g. `movement_id`) and **discards rows missing linkage fields** when a filter is requested (untrusted rows are dropped).
+  - Applies `recordLength` / `recordOffset` **in-memory after filtering** (because server-side paging may be ignored).
+  - Adds a **hard safety cap**: if the caller requests a bounded page (`record_length` is set) and the API returns an obviously unbounded dataset (currently `> 1000` rows), the client **returns `[]` and logs a warning**. This prevents catastrophic net pay sums from unrelated rows.
+- **`search_deductions_by_movement(..., include_history=True)` is bounded**: history fallback requests now include a conservative `record_length` to avoid accidentally pulling huge history datasets on broken servers.
+
+### Added
+- **Client-side safety net** for unfilterable history responses (hard cap + strict filtering + in-memory paging).
+
+### Why this exists
+- In some McLeod environments, `/deductions/history` behaves as effectively **unfilterable / unbounded** (ignores filters and paging; linkage fields may be missing). Consuming that response blindly can produce **absurd net pay** results. This change makes the client correctness-first: it either returns verified, scoped rows or returns nothing (with a warning).
+
+---
+
 ## [2025-12-18] Deductions Search & History
 
 ### Added
@@ -426,7 +444,7 @@ history = client.search_settlement_history(
 
 ### Known Issues
 - **`/deductions/history` requires Basic Auth** - API key authentication is rejected with 401. Must use username/password.
-- **Server-side filtering limited** - The `/deductions/history` endpoint ignores `movement_id` filter; client-side filtering is used.
+- **Server-side filtering/paging may be ignored** - In some environments `/deductions/history` ignores filters (movement_id, settlement_id, etc.) and may return huge unbounded lists; `recordLength`/`recordOffset` may be ignored in practice. Treat history responses as untrusted unless proven scoped.
 
 ### Files Changed
 - `tms_client.py` - Added functions
