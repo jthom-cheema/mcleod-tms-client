@@ -1,0 +1,48 @@
+# McLeod API Documentation - /mcmessages/zmitRoute/{unitId}/{moveId}
+
+**Source URL:** https://tms-cfaa.loadtracking.com:5690/ws/docs/services?operation=zmitRoute&role=-1&service=McMessageService
+
+---
+
+go back to [McMessageService](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=McMessageService&role=-1)
+
+# PUT /mcmessages/zmitRoute/{unitId}/{moveId}
+
+Zmits route information to the specified MC Unit
+
+Roles that can access this endpoint are [ Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1). 
+
+## Parameters
+
+name | description | type | default | type  
+---|---|---|---|---  
+unitId | ID of the MC Unit to be sent the route information |  path  |  |  [String](https://tms-cfaa.loadtracking.com:5690/ws/docs/types?type=java.lang.String&role=-1)  
+moveId | ID of the movement be zmitted |  path  |  |  [String](https://tms-cfaa.loadtracking.com:5690/ws/docs/types?type=java.lang.String&role=-1)  
+  
+* * *
+
+## Result
+
+[String](https://tms-cfaa.loadtracking.com:5690/ws/docs/types?type=java.lang.String&role=-1)
+
+a success/failure String to be displayed to the user
+
+## Request Details
+
+**Endpoint:** `PUT /mcmessages/zmitRoute/{unitId}/{moveId}`
+
+### Headers
+
+- **Authorization:** Required
+  - See [Authentication Help](https://tms-cfaa.loadtracking.com:5690/ws/docs/auth?role=-1)
+  - Supported: Basic, Token
+
+- **X-com.mcleodsoftware.CompanyID:** Required (company identifier)
+
+### Example Request
+
+```http
+PUT /mcmessages/zmitRoute/{unitId}/{moveId} HTTP/1.1
+X-com.mcleodsoftware.CompanyID: <your-company-id>
+Authorization: Basic <credentials>
+```

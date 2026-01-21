@@ -158,6 +158,28 @@ class TMSClient:
         """
         ...
 
+    def put_json(
+        self,
+        endpoint: str,
+        data: Optional[Dict[str, Any]] = None,
+        company_id: Optional[str] = None,
+        **kwargs: Any
+    ) -> Dict[str, Any]:
+        """Make a PUT request with JSON data and return JSON response."""
+        ...
+
+    def create_table_row(self, table: str, row: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
+        """Create a TableRowService row via PUT /{table}/create."""
+        ...
+
+    def update_table_row(self, table: str, row: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
+        """Update a TableRowService row via PUT /{table}/update."""
+        ...
+
+    def delete_table_row(self, table: str, row_id: str, company_id: Optional[str] = None) -> bool:
+        """Delete a TableRowService row via DELETE /{table}/{id} (uses Accept: text/plain)."""
+        ...
+
     def search_table_rows(
         self,
         table: str,
@@ -219,6 +241,24 @@ class TMSClient:
         company_id: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
         """Get a carrier profile by its 8-character carrier code."""
+        ...
+    
+    def get_payee(
+        self,
+        payee_id: str,
+        company_id: Optional[str] = None,
+        include_contacts: bool = False,
+        include_comments: bool = False
+    ) -> Optional[Dict[str, Any]]:
+        """Get a payee record by ID including pay-to address fields."""
+        ...
+    
+    def get_payee_pay_to_address(
+        self,
+        payee_id: str,
+        company_id: Optional[str] = None
+    ) -> Optional[Dict[str, str]]:
+        """Get just the pay-to (check) address info for a payee/carrier."""
         ...
     
     def get_factoring_company(

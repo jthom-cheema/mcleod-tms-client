@@ -633,6 +633,132 @@ class TMSClient:
         # If no exact match, return first result (API may return partial matches)
         return results[0] if results else None
 
+    def get_payee(self, payee_id: str, company_id: Optional[str] = None,
+                  include_contacts: bool = False, include_comments: bool = False) -> Optional[Dict[str, Any]]:
+        """
+        Get a payee record by ID from the payee table.
+        
+        This uses the GET /payees/{id} endpoint to retrieve full payee data including
+        the pay-to address fields (check_name, check_address, etc.) used for carrier payments.
+        
+        Args:
+            payee_id: The 8-character payee ID (e.g., "CONSVAWA" for a carrier)
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID` header
+            include_contacts: Include related Contact records (default False)
+            include_comments: Include related Comment records (default False)
+        
+        Returns:
+            RowPayee dictionary if found, None otherwise. Key pay-to address fields:
+            
+            **Main Address:**
+            - ``address1`` (str): Street address line 1
+            - ``address2`` (str): Street address line 2
+            - ``city`` (str): City
+            - ``state`` (str): State code
+            - ``zip_code`` (str): ZIP code
+            
+            **Pay-To Address (for checks/payments):**
+            - ``check_name`` (str): Pay-to name
+            - ``check_address`` (str): Pay-to address line 1
+            - ``check_address2`` (str): Pay-to address line 2
+            - ``check_city`` (str): Pay-to city
+            - ``check_st`` (str): Pay-to state code
+            - ``check_zip`` (str): Pay-to ZIP code
+            - ``check_city_st_zip`` (str): Combined city, state, zip
+            
+            **Other Fields:**
+            - ``id`` (str): Payee ID
+            - ``name`` (str): Payee name
+            - ``legal_name`` (str): Legal name
+            - ``email`` (str): Email address
+            - ``phone_number`` (str): Phone number
+            - ``status`` (str): Status code (A=Active)
+            - ``payment_method`` (str): Payment method
+            
+            **Nested (if carrier):**
+            - ``drsPayee``: DRS payee data (DOT#, MC#, insurance, etc.)
+        
+        Raises:
+            Exception: If API request fails (authentication, network, etc.)
+        
+        Examples:
+            Get payee with pay-to address:
+            >>> payee = client.get_payee("CONSVAWA")
+            >>> if payee:
+            ...     print(f"Pay-To: {payee.get('check_name')}")
+            ...     print(f"Address: {payee.get('check_address')}")
+            ...     print(f"City/St/Zip: {payee.get('check_city_st_zip')}")
+            
+            Get payee with contacts:
+            >>> payee = client.get_payee("CONSVAWA", include_contacts=True)
+            >>> if payee:
+            ...     contacts = payee.get('contacts', [])
+        """
+        if not payee_id:
+            return None
+        
+        payee_id = payee_id.strip().upper()
+        
+        params = {}
+        if include_contacts:
+            params['includeContacts'] = 'true'
+        if include_comments:
+            params['includeComments'] = 'true'
+        
+        try:
+            result = self.get_json(f"/payees/{payee_id}", company_id=company_id, params=params if params else None)
+            return result if isinstance(result, dict) else None
+        except Exception as e:
+            if "404" in str(e) or "not found" in str(e).lower():
+                return None
+            raise
+
+    def get_payee_pay_to_address(self, payee_id: str, company_id: Optional[str] = None) -> Optional[Dict[str, str]]:
+        """
+        Get just the pay-to (check) address info for a payee/carrier.
+        
+        Convenience method that extracts only the pay-to address fields from a payee record.
+        This is the address used when issuing checks or payments to carriers.
+        
+        Args:
+            payee_id: The 8-character payee ID (e.g., "CONSVAWA")
+            company_id: Optional override for `X-com.mcleodsoftware.CompanyID` header
+        
+        Returns:
+            Dictionary with pay-to address fields if found, None otherwise:
+            - ``name`` (str): Pay-to name (check_name)
+            - ``address1`` (str): Address line 1 (check_address)
+            - ``address2`` (str): Address line 2 (check_address2)
+            - ``city`` (str): City (check_city)
+            - ``state`` (str): State code (check_st)
+            - ``zip_code`` (str): ZIP code (check_zip)
+            - ``city_state_zip`` (str): Combined city, state, zip (check_city_st_zip)
+            - ``payee_id`` (str): Original payee ID
+            - ``payee_name`` (str): Payee name (not necessarily same as check_name)
+        
+        Examples:
+            >>> pay_to = client.get_payee_pay_to_address("CONSVAWA")
+            >>> if pay_to:
+            ...     print(f"Make check payable to: {pay_to['name']}")
+            ...     print(f"Mail to: {pay_to['address1']}")
+            ...     print(f"         {pay_to['city_state_zip']}")
+        """
+        payee = self.get_payee(payee_id, company_id=company_id)
+        if not payee:
+            return None
+        
+        return {
+            'payee_id': payee.get('id', ''),
+            'payee_name': payee.get('name', ''),
+            'name': payee.get('check_name', ''),
+            'address1': payee.get('check_address', ''),
+            'address2': payee.get('check_address2', ''),
+            'city': payee.get('check_city', ''),
+            'state': payee.get('check_st', ''),
+            'zip_code': payee.get('check_zip', ''),
+            'city_state_zip': payee.get('check_city_st_zip', ''),
+        }
+
     def get_factoring_company(self, factor_code: str, company_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
         Get factoring company information by factor code using the table row service.
@@ -709,6 +835,50 @@ class TMSClient:
             kwargs['json'] = data
         response = self.post(endpoint, company_id=company_id, **kwargs)
         return response.json()
+
+    def put_json(self, endpoint: str, data: Optional[Dict] = None, company_id: Optional[str] = None, **kwargs) -> Dict[Any, Any]:
+        """
+        Make a PUT request with JSON data and return JSON response.
+        """
+        if data is not None:
+            kwargs["json"] = data
+        response = self.put(endpoint, company_id=company_id, **kwargs)
+        return response.json()
+
+    def create_table_row(self, table: str, row: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Create a TableRowService row via ``PUT /{table}/create``.
+
+        Notes:
+        - Most McLeod TableRowService tables expect ``row["__type"]`` to be set to the table type name.
+        - Some tables require additional required fields (e.g. header_id, company_id, etc.).
+        """
+        table_name = str(table).strip().lstrip("/")
+        return self.put_json(f"/{table_name}/create", data=row, company_id=company_id)
+
+    def update_table_row(self, table: str, row: Dict[str, Any], company_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Update a TableRowService row via ``PUT /{table}/update``.
+
+        Notes:
+        - The row MUST include its primary key field(s) (typically ``id``).
+        """
+        table_name = str(table).strip().lstrip("/")
+        return self.put_json(f"/{table_name}/update", data=row, company_id=company_id)
+
+    def delete_table_row(self, table: str, row_id: str, company_id: Optional[str] = None) -> bool:
+        """
+        Delete a TableRowService row via ``DELETE /{table}/{id}``.
+
+        McLeod servers commonly require ``Accept: text/plain`` for delete endpoints; otherwise
+        they may return 406.
+        """
+        table_name = str(table).strip().lstrip("/")
+        rid = str(row_id).strip()
+        if not rid:
+            raise ValueError("row_id is required")
+        self.delete(f"/{table_name}/{rid}", company_id=company_id, headers={"Accept": "text/plain"})
+        return True
     
     # Search helpers
     def search_table_rows(

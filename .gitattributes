@@ -1,0 +1,4 @@
+# Treat vendor documentation snapshot as generated content.
+# This affects GitHub Linguist stats and some diff/view behavior.
+docs/** linguist-generated=true
+

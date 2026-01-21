@@ -110,6 +110,33 @@ for carrier in carriers:
     print(f"MC#: {carrier.get('mc_number')} | DOT#: {carrier.get('dot_number')}")
 ```
 
+### Payees / Pay-To Address
+```python
+# Get full payee record (includes pay-to address for checks/payments)
+payee = client.get_payee("SUNNTRCA")
+if payee:
+    # Main address
+    print(f"Carrier: {payee.get('name')}")
+    print(f"Address: {payee.get('address1')}, {payee.get('city')}, {payee.get('state')}")
+    
+    # Pay-to address (where checks go - may be factoring company)
+    print(f"Pay-To: {payee.get('check_name')}")
+    print(f"Check Address: {payee.get('check_address')}")
+    print(f"Check City/St/Zip: {payee.get('check_city')}, {payee.get('check_st')} {payee.get('check_zip')}")
+
+# Get payee with contacts included
+payee = client.get_payee("SUNNTRCA", include_contacts=True, include_comments=True)
+
+# Convenience method: just the pay-to address fields
+pay_to = client.get_payee_pay_to_address("SUNNTRCA")
+if pay_to:
+    print(f"Make check payable to: {pay_to['name']}")
+    print(f"Mail to: {pay_to['address1']}, {pay_to['city']}, {pay_to['state']} {pay_to['zip_code']}")
+
+# Get payee from different company
+tms2_payee = client.get_payee("SUNNTRCA", company_id="TMS2")
+```
+
 ### Factoring Companies
 ```python
 # Get factoring company by factor code

@@ -1,0 +1,37 @@
+# McLeod API Documentation - MovementService
+
+**Source URL:** https://tms-cfaa.loadtracking.com:5690/ws/docs/services?role=-1&service=MovementService
+
+---
+
+go back [ Home](https://tms-cfaa.loadtracking.com:5690/ws/docs/home?role=-1)  
+  
+# MovementService
+
+This service provides methods for retrieving movements, flipping them between brokerage and asset types, sending load confirmations and managing extra pay on the movement.
+
+## Operations
+
+name | role | description  
+---|---|---  
+[GET /movements](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getMovementByQuery&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves a List of movements having a full or partial match of the ID to the given argument.  
+[GET /movements/adhocOffers](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getAdhocLoadOffers&role=-1) |  [Drivers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves a List of RowMovement objects matching the criteria given that represent the available movements for a driver.  
+[GET /movements/customTemplates](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getCustomTemplates&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves a list of custom document designer templates. Used in conjunction with sending rate confirmations.  
+[GET /movements/offers](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getOffers&role=-1) |  [Drivers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves a List of RowMovement objects that represent the top five available movements for a driver.  
+[GET /movements/retrieve](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=retrieveMovements&role=-1) |  [Freight Matching](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Searches the database for movements matching the given request parameters. Query parameters to be used as search criteria; All parameters are optional.  
+[GET /movements/search](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getMovementsByAdvancedSearch&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Searches the database for movements matching the given request parameters.  
+[GET /movements/userSavedSearch](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=userSavedSearch&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves a List of RowMovement objects based on an existing saved search.  
+[GET /movements/{id}](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getMovement&role=-1) |  [Users, Drivers, Carriers, Carrier Drivers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves the Movement specified by the ID.  
+[GET /movements/{id}/confirmationDefaults](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getConfirmationDefaults&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves the default values for the carrier contact to receive the rate confirmation.  
+[GET /movements/{id}/estimatedPay](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getEstimatedPay&role=-1) |  [Drivers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves the estimated pay for the load specified by the ID..  
+[GET /movements/{id}/otherPay](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getDriverExtraPay&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Returns a list of Driver Extra Pay records for a given movement  
+[GET /movements/{id}/otherPay/{otherPayId}](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getDriverExtraPayById&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Returns the requested driver extra pay record.  
+[GET /movements/{id}/route](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=getRoute&role=-1) |  [Users, Drivers, Carriers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Retrieves the step by step route information from the connected mileage software. Based on EntryMovement.showRoute();  
+[POST /movements/createLTLMovement](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=createLTLMovement&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Creates an LTL movement. If a `recurringMovementId` is given, then the movement will be created from that record and all other parameters on this request will serve to override it. When this parameter is omitted, the movement type, origin, destination, departure date and transit basis are used to find a recurring movement that best matches those values. Again, all other parameters would override those values. If no recurring movement is specified or found, a new blank movement is created with the parameters from this method filling in the details.  
+[POST /movements/{id}/acceptOffer](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=acceptOffer&role=-1) |  [Drivers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Accepts the movement and preassigns the driver to it, depending on the dispatch control setting.  
+[POST /movements/{id}/declineOffer](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=declineOffer&role=-1) |  [Drivers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Declines the movement offered to the driver.  
+[POST /movements/{id}/setBrokerageFlag](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=setBrokerageFlag&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) |   
+[POST /movements/{id}/updateLocationTrackingStatus](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=updateLocationTrackingStatus&role=-1) |  [Carriers, Carrier Drivers](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Updates the Brokerage Tracking Status based on if the user's device has location services enabled  
+[POST /movements/{id}/updateOperationalStatus](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=updateOperationalStatus&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Updates the operational status field on the movement. Movements must be of LTL type.  
+[PUT /movements/{id}/otherPay](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=createDriverExtraPay&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Creates other pay records tied to the movement record.  
+[PUT /movements/{id}/sendConfirmation](https://tms-cfaa.loadtracking.com:5690/ws/docs/services?service=MovementService&operation=sendConfirmation&role=-1) |  [Users](https://tms-cfaa.loadtracking.com:5690/ws/docs/roles?role=-1) | Sends a confirmation to the carrier, via return PDF, email, fax, or eRate (imaging).

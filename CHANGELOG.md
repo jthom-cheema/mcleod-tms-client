@@ -4,6 +4,53 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2026-01-21] Payee Pay-To Address
+
+### Added
+- **`get_payee()`** - Get a payee record by ID with full pay-to address fields
+- **`get_payee_pay_to_address()`** - Convenience method to extract just pay-to address info
+
+### What It Does
+
+**`get_payee()`**: Retrieves a full RowPayee record using `GET /payees/{id}`. Returns all payee fields including the pay-to (check) address fields used for carrier payments. Optionally includes related contacts and comments.
+
+**`get_payee_pay_to_address()`**: Extracts just the pay-to address fields from a payee record. Useful when you only need the address where checks/payments should be sent (which may be a factoring company).
+
+### Key Pay-To Fields
+- `check_name` - Pay-to name (may be factoring company)
+- `check_address` / `check_address2` - Pay-to address lines
+- `check_city` / `check_st` / `check_zip` - Pay-to city, state, ZIP
+
+### Usage
+
+```python
+from tms_client import TMSClient
+
+with TMSClient() as client:
+    # Get full payee record
+    payee = client.get_payee("SUNNTRCA")
+    if payee:
+        print(f"Carrier: {payee.get('name')}")
+        print(f"Pay-To: {payee.get('check_name')}")
+        print(f"Address: {payee.get('check_address')}")
+        print(f"City/St/Zip: {payee.get('check_city')}, {payee.get('check_st')} {payee.get('check_zip')}")
+    
+    # Get payee with contacts
+    payee = client.get_payee("SUNNTRCA", include_contacts=True)
+    
+    # Convenience method for just pay-to address
+    pay_to = client.get_payee_pay_to_address("SUNNTRCA")
+    if pay_to:
+        print(f"Make check to: {pay_to['name']}")
+        print(f"Mail to: {pay_to['address1']}, {pay_to['city']}, {pay_to['state']} {pay_to['zip_code']}")
+```
+
+### See Also
+- `examples.py` → `example_payee_pay_to_address()`
+- API Docs: `docs/index_operation_getPayee_role_-1_service_PayeeService.md`
+
+---
+
 ## [2026-01-XX] Billing Record Updates
 
 ### Added

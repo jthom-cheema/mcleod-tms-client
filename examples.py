@@ -859,6 +859,58 @@ def example_carrier_search():
             print(f"  DOT Number: {carrier.get('dot_number')}")
 
 
+def example_payee_pay_to_address():
+    """Getting payee records and pay-to (check) address information for carriers."""
+    # Supports username/password or API key
+    with TMSClient("username", "password") as client:
+        # Get full payee record by ID
+        # Payee IDs are the same as carrier codes (8 characters)
+        payee = client.get_payee("SUNNTRCA")
+        if payee:
+            print(f"Payee: {payee.get('name')} (ID: {payee.get('id')})")
+            
+            # Main address (carrier's physical address)
+            print(f"\nMain Address:")
+            print(f"  {payee.get('address1')}")
+            if payee.get('address2'):
+                print(f"  {payee.get('address2')}")
+            print(f"  {payee.get('city')}, {payee.get('state')} {payee.get('zip_code')}")
+            
+            # Pay-to address (where checks/payments go - may be factoring company)
+            print(f"\nPay-To Address (for checks/payments):")
+            print(f"  Name: {payee.get('check_name')}")
+            print(f"  {payee.get('check_address')}")
+            if payee.get('check_address2'):
+                print(f"  {payee.get('check_address2')}")
+            print(f"  {payee.get('check_city')}, {payee.get('check_st')} {payee.get('check_zip')}")
+            
+            # Check if carrier uses factoring (pay-to name differs from carrier name)
+            if payee.get('check_name') != payee.get('name'):
+                print(f"\n  Note: Pay-to is different from carrier - likely a factoring company")
+        
+        # Get payee with contacts included
+        payee_with_contacts = client.get_payee("SUNNTRCA", include_contacts=True)
+        if payee_with_contacts:
+            contacts = payee_with_contacts.get('contacts', [])
+            print(f"\nContacts: {len(contacts) if contacts else 'None'}")
+        
+        # Convenience method: get just the pay-to address fields
+        pay_to = client.get_payee_pay_to_address("SUNNTRCA")
+        if pay_to:
+            print(f"\nPay-To Summary:")
+            print(f"  Carrier: {pay_to['payee_name']} ({pay_to['payee_id']})")
+            print(f"  Make check payable to: {pay_to['name']}")
+            print(f"  Mail to: {pay_to['address1']}")
+            if pay_to['address2']:
+                print(f"           {pay_to['address2']}")
+            print(f"           {pay_to['city']}, {pay_to['state']} {pay_to['zip_code']}")
+        
+        # Get payee from different company
+        tms2_payee = client.get_payee("SUNNTRCA", company_id="TMS2")
+        if tms2_payee:
+            print(f"\nTMS2 Payee: {tms2_payee.get('name')}")
+
+
 def example_factoring_company_search():
     """Retrieving factoring company information by factor code."""
     # Supports username/password or API key
