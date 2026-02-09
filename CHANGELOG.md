@@ -4,6 +4,64 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2026-02-09] Customer Lane Rates
+
+### Added
+- **`get_customer_lane_rates()`** - Retrieve all lanes and their most recent rates for a customer
+
+### What It Does
+
+Consolidates rate headers (`rate` table) and lane details (`orig_dest_rate` table) into a single list where each lane appears once with its most recent rate information. Useful for getting a snapshot of current contract rates per lane.
+
+### Usage
+
+```python
+from tms_client import TMSClient
+
+with TMSClient() as client:
+    # Get all lanes for a customer (includes expired)
+    lanes = client.get_customer_lane_rates("HOMEATGA")
+    
+    # Get only active (non-expired) lanes
+    active_lanes = client.get_customer_lane_rates("HOMEATGA", include_expired=False)
+    
+    # Process results
+    for lane in lanes:
+        print(f"{lane['lane_key']}: ${lane['rate']}")
+        print(f"  Effective: {lane['effective_date']}")
+        print(f"  Expires: {lane['expiration_date'] or 'Open-ended'}")
+        print(f"  Status: {'EXPIRED' if lane['is_expired'] else 'ACTIVE'}")
+```
+
+### Returned Fields
+| Field | Description |
+|-------|-------------|
+| `lane_key` | Unique identifier: `origin (code) -> dest (code)` |
+| `origin_city`, `origin_state`, `origin_value`, `origin_code` | Origin location details |
+| `dest_city`, `dest_state`, `dest_value`, `dest_code` | Destination location details |
+| `rate` | Most recent rate amount (float) |
+| `rate_type` | F=Flat, M=Per Mile, etc. |
+| `rate_id` | Reference to rate header |
+| `effective_date` | When rate became effective (YYYYMMDD) |
+| `expiration_date` | When rate expires/expired (YYYYMMDD or None) |
+| `is_expired` | Boolean - is the rate currently expired? |
+| `bill_distance` | Lane miles (if available) |
+| `times_used` | How many times this lane rate was used |
+| `description` | Rate description/notes |
+| `rate_count` | How many rate entries exist for this lane |
+
+### Key Implementation Notes
+- Uses `TableRowService` to query `rate` and `orig_dest_rate` tables
+- For lanes with multiple rate entries, selects the most recent by effective_date
+- Expiration check uses current date comparison
+- Results sorted alphabetically by lane_key
+
+### See Also
+- `examples.py` → `example_customer_lane_rates()`
+- `USAGE.md` → Customer Lane Rates section
+
+---
+
 ## [2026-01-21] Payee Pay-To Address
 
 ### Added

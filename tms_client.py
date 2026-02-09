@@ -3844,6 +3844,146 @@ class TMSClient:
 
         return max(non_void, key=_pay_sort_key)
 
+    def get_customer_lane_rates(
+        self,
+        customer_id: str,
+        include_expired: bool = True,
+        company_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all lanes and their most recent rates for a customer.
+        
+        Consolidates rate headers and lane details into a single list where
+        each lane appears once with its most recent rate information.
+        
+        Args:
+            customer_id: Customer code (e.g., 'HOMEATGA')
+            include_expired: If True, includes lanes with expired rates (default True)
+            company_id: Optional company ID override
+            
+        Returns:
+            List of dicts, each containing:
+                - lane_key: Unique lane identifier (origin -> destination)
+                - origin_city, origin_state, origin_value, origin_code
+                - dest_city, dest_state, dest_value, dest_code  
+                - rate: Most recent rate amount
+                - rate_type: F=Flat, M=Per Mile, etc.
+                - rate_id: Reference to rate header
+                - effective_date: When rate became effective (YYYYMMDD)
+                - expiration_date: When rate expires/expired (YYYYMMDD or None if open-ended)
+                - is_expired: Boolean indicating if rate is currently expired
+                - bill_distance: Lane miles (if available)
+                - times_used: Number of times this lane rate was used
+                - description: Rate description/notes
+        """
+        from datetime import datetime
+        
+        today = datetime.now().strftime("%Y%m%d")
+        
+        # Step 1: Get all rate headers for the customer
+        rate_headers = self.search_table_rows(
+            'rate', 
+            filters={'customer_id': customer_id},
+            company_id=company_id
+        )
+        
+        if not rate_headers:
+            return []
+        
+        # Build rate header lookup
+        header_map = {}
+        for r in rate_headers:
+            eff = r.get('effective_date', '')[:8] if r.get('effective_date') else None
+            exp = r.get('expiration_date', '')[:8] if r.get('expiration_date') else None
+            header_map[r['id']] = {
+                'effective_date': eff,
+                'expiration_date': exp,
+                'is_expired': exp is not None and exp < today if exp else False,
+            }
+        
+        # Step 2: Get all lane details for each rate header
+        all_lanes = []
+        for rate_id in header_map.keys():
+            lanes = self.search_table_rows(
+                'orig_dest_rate',
+                filters={'rate_id': str(rate_id)},
+                company_id=company_id
+            )
+            for lane in lanes:
+                lane['_header'] = header_map[rate_id]
+            all_lanes.extend(lanes)
+        
+        # Step 3: Consolidate lanes - group by lane key, keep most recent
+        lane_groups: Dict[str, List[Dict[str, Any]]] = {}
+        for lane in all_lanes:
+            # Build lane key from origin -> destination
+            orig = lane.get('orig_value', 'UNKNOWN')
+            dest = lane.get('dest_value', 'UNKNOWN')
+            orig_code = lane.get('orig_code', '')
+            dest_code = lane.get('dest_code', '')
+            lane_key = f"{orig} ({orig_code}) -> {dest} ({dest_code})"
+            
+            if lane_key not in lane_groups:
+                lane_groups[lane_key] = []
+            lane_groups[lane_key].append(lane)
+        
+        # Step 4: For each lane, find the most recent rate
+        results = []
+        for lane_key, entries in lane_groups.items():
+            # Sort by effective date descending, then by rate_id descending
+            sorted_entries = sorted(
+                entries,
+                key=lambda x: (
+                    x['_header']['effective_date'] or '00000000',
+                    x.get('rate_id', 0)
+                ),
+                reverse=True
+            )
+            
+            # Take the most recent
+            latest = sorted_entries[0]
+            header = latest['_header']
+            
+            is_expired = header['is_expired']
+            
+            # Skip expired if not requested
+            if not include_expired and is_expired:
+                continue
+            
+            # Parse rate value
+            rate_val = latest.get('rate', '0')
+            try:
+                rate_float = float(str(rate_val).replace(',', ''))
+            except (ValueError, TypeError):
+                rate_float = 0.0
+            
+            results.append({
+                'lane_key': lane_key,
+                'origin_city': latest.get('orig_city_name'),
+                'origin_state': latest.get('orig_state'),
+                'origin_value': latest.get('orig_value'),
+                'origin_code': latest.get('orig_code'),
+                'dest_city': latest.get('dest_city_name'),
+                'dest_state': latest.get('dest_state'),
+                'dest_value': latest.get('dest_value'),
+                'dest_code': latest.get('dest_code'),
+                'rate': rate_float,
+                'rate_type': latest.get('rate_type'),
+                'rate_id': latest.get('rate_id'),
+                'effective_date': header['effective_date'],
+                'expiration_date': header['expiration_date'],
+                'is_expired': is_expired,
+                'bill_distance': latest.get('bill_distance'),
+                'times_used': latest.get('times_used', 0),
+                'description': latest.get('descr'),
+                'rate_count': len(entries),  # How many rate entries exist for this lane
+            })
+        
+        # Sort by lane key for consistent output
+        results.sort(key=lambda x: x['lane_key'])
+        
+        return results
+
     def close(self) -> None:
         """Close the session."""
         self.session.close()

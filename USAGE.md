@@ -137,6 +137,51 @@ if pay_to:
 tms2_payee = client.get_payee("SUNNTRCA", company_id="TMS2")
 ```
 
+### Customer Lane Rates
+```python
+# Get all lanes and their most recent rates for a customer
+lanes = client.get_customer_lane_rates("HOMEATGA")
+print(f"Found {len(lanes)} unique lanes")
+
+# Get only active (non-expired) lanes
+active_lanes = client.get_customer_lane_rates("HOMEATGA", include_expired=False)
+print(f"Found {len(active_lanes)} active lanes")
+
+# Process results
+for lane in lanes[:5]:  # Show first 5
+    print(f"{lane['lane_key']}")
+    print(f"  Rate: ${lane['rate']} ({lane['rate_type']})")
+    print(f"  Effective: {lane['effective_date']}")
+    print(f"  Expires: {lane['expiration_date'] or 'Open-ended'}")
+    print(f"  Status: {'EXPIRED' if lane['is_expired'] else 'ACTIVE'}")
+
+# Filter and analyze
+active = [l for l in lanes if not l['is_expired']]
+expired = [l for l in lanes if l['is_expired']]
+print(f"Active: {len(active)}, Expired: {len(expired)}")
+
+# Find highest rate lanes
+by_rate = sorted(lanes, key=lambda x: x['rate'], reverse=True)
+print(f"Highest rate lane: {by_rate[0]['lane_key']} @ ${by_rate[0]['rate']}")
+
+# Get lanes from different company
+tms2_lanes = client.get_customer_lane_rates("HOMEATGA", company_id="TMS2")
+```
+
+**Returned Fields**:
+| Field | Description |
+|-------|-------------|
+| `lane_key` | Unique identifier: `origin (code) -> dest (code)` |
+| `origin_city`, `origin_state`, `origin_value`, `origin_code` | Origin location |
+| `dest_city`, `dest_state`, `dest_value`, `dest_code` | Destination location |
+| `rate` | Most recent rate amount (float) |
+| `rate_type` | F=Flat, M=Per Mile, etc. |
+| `effective_date` | When rate became effective (YYYYMMDD) |
+| `expiration_date` | When rate expires/expired (YYYYMMDD or None) |
+| `is_expired` | Boolean - is rate currently expired? |
+| `bill_distance` | Lane miles if available |
+| `rate_count` | How many rate entries exist for this lane |
+
 ### Factoring Companies
 ```python
 # Get factoring company by factor code

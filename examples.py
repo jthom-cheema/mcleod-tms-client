@@ -1875,6 +1875,63 @@ def example_create_comments():
             print(f"    Entered By: {c.get('enteredByUser', {}).get('name', 'N/A')}")
 
 
+def example_customer_lane_rates():
+    """Get all lanes and their most recent rates for a customer.
+    
+    Consolidates rate headers and lane details into a single list where
+    each lane appears once with its most recent rate information.
+    """
+    with TMSClient("username", "password") as client:
+        customer = "HOMEATGA"
+        
+        # Get all lanes (including expired)
+        print(f"=== All Lanes for {customer} ===")
+        lanes = client.get_customer_lane_rates(customer)
+        print(f"Found {len(lanes)} unique lanes")
+        
+        # Count active vs expired
+        active = [l for l in lanes if not l['is_expired']]
+        expired = [l for l in lanes if l['is_expired']]
+        print(f"Active: {len(active)}, Expired: {len(expired)}")
+        
+        # Show first 5 lanes
+        print("\n=== Sample Lanes ===")
+        for lane in lanes[:5]:
+            print(f"\n{lane['lane_key']}")
+            print(f"  Rate: ${lane['rate']} ({lane['rate_type'] or 'N/A'})")
+            print(f"  Effective: {lane['effective_date']}")
+            print(f"  Expires: {lane['expiration_date'] or 'Open-ended'}")
+            print(f"  Status: {'EXPIRED' if lane['is_expired'] else 'ACTIVE'}")
+            print(f"  Distance: {lane['bill_distance']} miles" if lane['bill_distance'] else "  Distance: N/A")
+            print(f"  Times used: {lane['times_used']}")
+        
+        # Get only active lanes
+        print(f"\n=== Active Lanes Only for {customer} ===")
+        active_lanes = client.get_customer_lane_rates(customer, include_expired=False)
+        print(f"Found {len(active_lanes)} active lanes")
+        
+        # Find highest rate lanes
+        print("\n=== Top 5 Highest Rate Lanes ===")
+        by_rate = sorted(lanes, key=lambda x: x['rate'], reverse=True)
+        for lane in by_rate[:5]:
+            print(f"  ${lane['rate']:>10,.2f} - {lane['lane_key'][:50]}")
+        
+        # Find lanes with multiple rate history
+        print("\n=== Lanes With Most Rate Changes ===")
+        by_history = sorted(lanes, key=lambda x: x['rate_count'], reverse=True)
+        for lane in by_history[:5]:
+            print(f"  {lane['rate_count']} rates - {lane['lane_key'][:50]}")
+        
+        # Process multiple customers
+        print("\n=== Multiple Customers ===")
+        customers = ["HOMEATGA", "KRUSTTWA", "LOWEWINC"]
+        for cust in customers:
+            cust_lanes = client.get_customer_lane_rates(cust)
+            active = len([l for l in cust_lanes if not l['is_expired']])
+            expired = len([l for l in cust_lanes if l['is_expired']])
+            print(f"  {cust}: {len(cust_lanes)} lanes ({active} active, {expired} expired)")
+
+
 def example_authentication_methods():
     """Different ways to authenticate with the TMS client."""
     # Method 1: Username and password (positional)
@@ -1940,4 +1997,5 @@ if __name__ == "__main__":
     print("- example_billing_history_search()")
     print("- example_billing_updates()")
     print("- example_settlement_search()")
+    print("- example_customer_lane_rates()")
     print("- example_authentication_methods()")
