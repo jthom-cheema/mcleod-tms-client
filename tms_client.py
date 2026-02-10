@@ -3856,7 +3856,8 @@ class TMSClient:
         Consolidates rate headers and lane details into a single list where
         each lane appears once with its most recent rate information.
         When multiple customers are provided, lanes are unified across all
-        customers - each unique lane appears once with its most recent rate.
+        customers - each unique lane appears once with its most recent rate
+        (even if multiple customers have rates on the same lane).
         
         Args:
             customer_id: Customer code (e.g., 'HOMEATGA') or list of codes

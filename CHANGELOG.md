@@ -11,7 +11,7 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ### What It Does
 
-Consolidates rate headers (`rate` table) and lane details (`orig_dest_rate` table) into a single list where each lane appears once with its most recent rate information. Accepts a single customer code or a list of customer codes - when multiple customers are provided, lanes are unified across all customers.
+Consolidates rate headers (`rate` table) and lane details (`orig_dest_rate` table) into a single list where each lane appears once with its most recent rate information. Accepts a single customer code or a list of customer codes - when multiple customers are provided, lanes are unified across all customers and only the most recent rate per lane is returned (even if multiple customers have rates on the same lane).
 
 ### Usage
 

@@ -1902,12 +1902,14 @@ def example_customer_lane_rates():
             print(f"  Expires: {lane['expiration_date'] or 'Open-ended'}")
             print(f"  Status: {'EXPIRED' if lane['is_expired'] else 'ACTIVE'}")
         
-        # Multiple customers - unified list
+        # Multiple customers - unified list with one entry per lane
+        # If multiple customers have rates on the same lane, only the most recent is kept
         print("\n=== Multiple Customers (Unified) ===")
         customers = ["HOMEATGA", "KRUSTTWA", "LOWEWINC", "DPETMEMO"]
         unified_lanes = client.get_customer_lane_rates(customers)
         print(f"Customers: {customers}")
         print(f"Total unique lanes: {len(unified_lanes)}")
+        print("(Each lane appears once with its most recent rate across all customers)")
         
         active = len([l for l in unified_lanes if not l['is_expired']])
         expired = len([l for l in unified_lanes if l['is_expired']])

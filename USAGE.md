@@ -143,9 +143,10 @@ tms2_payee = client.get_payee("SUNNTRCA", company_id="TMS2")
 lanes = client.get_customer_lane_rates("HOMEATGA")
 print(f"Found {len(lanes)} unique lanes")
 
-# Multiple customers - unified list with duplicates removed
+# Multiple customers - unified list, one entry per lane with the most recent rate
 lanes = client.get_customer_lane_rates(["HOMEATGA", "KRUSTTWA", "LOWEWINC", "DPETMEMO"])
 print(f"Found {len(lanes)} unique lanes across all customers")
+# If multiple customers have rates on the same lane, only the most recent is returned
 
 # Get only active (non-expired) lanes
 active_lanes = client.get_customer_lane_rates("HOMEATGA", include_expired=False)
