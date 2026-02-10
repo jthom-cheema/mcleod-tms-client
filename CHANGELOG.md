@@ -7,11 +7,11 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 ## [2026-02-09] Customer Lane Rates
 
 ### Added
-- **`get_customer_lane_rates()`** - Retrieve all lanes and their most recent rates for a customer
+- **`get_customer_lane_rates()`** - Retrieve all lanes and their most recent rates for one or more customers
 
 ### What It Does
 
-Consolidates rate headers (`rate` table) and lane details (`orig_dest_rate` table) into a single list where each lane appears once with its most recent rate information. Useful for getting a snapshot of current contract rates per lane.
+Consolidates rate headers (`rate` table) and lane details (`orig_dest_rate` table) into a single list where each lane appears once with its most recent rate information. Accepts a single customer code or a list of customer codes - when multiple customers are provided, lanes are unified across all customers.
 
 ### Usage
 
@@ -19,24 +19,31 @@ Consolidates rate headers (`rate` table) and lane details (`orig_dest_rate` tabl
 from tms_client import TMSClient
 
 with TMSClient() as client:
-    # Get all lanes for a customer (includes expired)
+    # Single customer
     lanes = client.get_customer_lane_rates("HOMEATGA")
+    
+    # Multiple customers - unified list
+    lanes = client.get_customer_lane_rates(["HOMEATGA", "KRUSTTWA", "LOWEWINC"])
     
     # Get only active (non-expired) lanes
     active_lanes = client.get_customer_lane_rates("HOMEATGA", include_expired=False)
     
     # Process results
     for lane in lanes:
-        print(f"{lane['lane_key']}: ${lane['rate']}")
+        print(f"{lane['lane_key']}: ${lane['rate']} ({lane['customer_id']})")
         print(f"  Effective: {lane['effective_date']}")
         print(f"  Expires: {lane['expiration_date'] or 'Open-ended'}")
         print(f"  Status: {'EXPIRED' if lane['is_expired'] else 'ACTIVE'}")
+        if len(lane['customers']) > 1:
+            print(f"  Also on: {lane['customers']}")
 ```
 
 ### Returned Fields
 | Field | Description |
 |-------|-------------|
 | `lane_key` | Unique identifier: `origin (code) -> dest (code)` |
+| `customer_id` | Customer code this rate belongs to |
+| `customers` | List of all customers with rates on this lane |
 | `origin_city`, `origin_state`, `origin_value`, `origin_code` | Origin location details |
 | `dest_city`, `dest_state`, `dest_value`, `dest_code` | Destination location details |
 | `rate` | Most recent rate amount (float) |
@@ -51,6 +58,7 @@ with TMSClient() as client:
 | `rate_count` | How many rate entries exist for this lane |
 
 ### Key Implementation Notes
+- Accepts single customer code (str) or list of codes (List[str])
 - Uses `TableRowService` to query `rate` and `orig_dest_rate` tables
 - For lanes with multiple rate entries, selects the most recent by effective_date
 - Expiration check uses current date comparison

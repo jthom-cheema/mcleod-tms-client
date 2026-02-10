@@ -3846,24 +3846,28 @@ class TMSClient:
 
     def get_customer_lane_rates(
         self,
-        customer_id: str,
+        customer_id: Union[str, List[str]],
         include_expired: bool = True,
         company_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Get all lanes and their most recent rates for a customer.
+        Get all lanes and their most recent rates for one or more customers.
         
         Consolidates rate headers and lane details into a single list where
         each lane appears once with its most recent rate information.
+        When multiple customers are provided, lanes are unified across all
+        customers - each unique lane appears once with its most recent rate.
         
         Args:
-            customer_id: Customer code (e.g., 'HOMEATGA')
+            customer_id: Customer code (e.g., 'HOMEATGA') or list of codes
+                         (e.g., ['HOMEATGA', 'KRUSTTWA', 'LOWEWINC'])
             include_expired: If True, includes lanes with expired rates (default True)
             company_id: Optional company ID override
             
         Returns:
             List of dicts, each containing:
                 - lane_key: Unique lane identifier (origin -> destination)
+                - customer_id: Customer code this rate belongs to
                 - origin_city, origin_state, origin_value, origin_code
                 - dest_city, dest_state, dest_value, dest_code  
                 - rate: Most recent rate amount
@@ -3875,42 +3879,47 @@ class TMSClient:
                 - bill_distance: Lane miles (if available)
                 - times_used: Number of times this lane rate was used
                 - description: Rate description/notes
+                - rate_count: How many rate entries exist for this lane
+                - customers: List of all customers with rates on this lane (when multiple customers provided)
         """
         from datetime import datetime
         
         today = datetime.now().strftime("%Y%m%d")
         
-        # Step 1: Get all rate headers for the customer
-        rate_headers = self.search_table_rows(
-            'rate', 
-            filters={'customer_id': customer_id},
-            company_id=company_id
-        )
+        # Normalize to list
+        customer_ids = [customer_id] if isinstance(customer_id, str) else list(customer_id)
         
-        if not rate_headers:
-            return []
-        
-        # Build rate header lookup
+        # Step 1: Get all rate headers for all customers
         header_map = {}
-        for r in rate_headers:
-            eff = r.get('effective_date', '')[:8] if r.get('effective_date') else None
-            exp = r.get('expiration_date', '')[:8] if r.get('expiration_date') else None
-            header_map[r['id']] = {
-                'effective_date': eff,
-                'expiration_date': exp,
-                'is_expired': exp is not None and exp < today if exp else False,
-            }
+        for cust_id in customer_ids:
+            rate_headers = self.search_table_rows(
+                'rate', 
+                filters={'customer_id': cust_id},
+                company_id=company_id
+            )
+            for r in rate_headers:
+                eff = r.get('effective_date', '')[:8] if r.get('effective_date') else None
+                exp = r.get('expiration_date', '')[:8] if r.get('expiration_date') else None
+                header_map[r['id']] = {
+                    'customer_id': cust_id,
+                    'effective_date': eff,
+                    'expiration_date': exp,
+                    'is_expired': exp is not None and exp < today if exp else False,
+                }
+        
+        if not header_map:
+            return []
         
         # Step 2: Get all lane details for each rate header
         all_lanes = []
-        for rate_id in header_map.keys():
+        for rate_id, header_info in header_map.items():
             lanes = self.search_table_rows(
                 'orig_dest_rate',
                 filters={'rate_id': str(rate_id)},
                 company_id=company_id
             )
             for lane in lanes:
-                lane['_header'] = header_map[rate_id]
+                lane['_header'] = header_info
             all_lanes.extend(lanes)
         
         # Step 3: Consolidate lanes - group by lane key, keep most recent
@@ -3957,8 +3966,12 @@ class TMSClient:
             except (ValueError, TypeError):
                 rate_float = 0.0
             
+            # Collect all customers that have rates on this lane
+            customers_on_lane = list(set(e['_header']['customer_id'] for e in entries))
+            
             results.append({
                 'lane_key': lane_key,
+                'customer_id': header['customer_id'],
                 'origin_city': latest.get('orig_city_name'),
                 'origin_state': latest.get('orig_state'),
                 'origin_value': latest.get('orig_value'),
@@ -3976,7 +3989,8 @@ class TMSClient:
                 'bill_distance': latest.get('bill_distance'),
                 'times_used': latest.get('times_used', 0),
                 'description': latest.get('descr'),
-                'rate_count': len(entries),  # How many rate entries exist for this lane
+                'rate_count': len(entries),
+                'customers': customers_on_lane,
             })
         
         # Sort by lane key for consistent output

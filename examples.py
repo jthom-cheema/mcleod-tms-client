@@ -1876,60 +1876,71 @@ def example_create_comments():
 
 
 def example_customer_lane_rates():
-    """Get all lanes and their most recent rates for a customer.
+    """Get all lanes and their most recent rates for one or more customers.
     
     Consolidates rate headers and lane details into a single list where
     each lane appears once with its most recent rate information.
+    Accepts a single customer code or a list of codes.
     """
     with TMSClient("username", "password") as client:
+        # Single customer
         customer = "HOMEATGA"
-        
-        # Get all lanes (including expired)
-        print(f"=== All Lanes for {customer} ===")
+        print(f"=== Single Customer: {customer} ===")
         lanes = client.get_customer_lane_rates(customer)
         print(f"Found {len(lanes)} unique lanes")
         
-        # Count active vs expired
         active = [l for l in lanes if not l['is_expired']]
         expired = [l for l in lanes if l['is_expired']]
         print(f"Active: {len(active)}, Expired: {len(expired)}")
         
-        # Show first 5 lanes
+        # Show sample lanes
         print("\n=== Sample Lanes ===")
-        for lane in lanes[:5]:
-            print(f"\n{lane['lane_key']}")
+        for lane in lanes[:3]:
+            print(f"\n{lane['lane_key']} ({lane['customer_id']})")
             print(f"  Rate: ${lane['rate']} ({lane['rate_type'] or 'N/A'})")
             print(f"  Effective: {lane['effective_date']}")
             print(f"  Expires: {lane['expiration_date'] or 'Open-ended'}")
             print(f"  Status: {'EXPIRED' if lane['is_expired'] else 'ACTIVE'}")
-            print(f"  Distance: {lane['bill_distance']} miles" if lane['bill_distance'] else "  Distance: N/A")
-            print(f"  Times used: {lane['times_used']}")
         
-        # Get only active lanes
-        print(f"\n=== Active Lanes Only for {customer} ===")
-        active_lanes = client.get_customer_lane_rates(customer, include_expired=False)
-        print(f"Found {len(active_lanes)} active lanes")
+        # Multiple customers - unified list
+        print("\n=== Multiple Customers (Unified) ===")
+        customers = ["HOMEATGA", "KRUSTTWA", "LOWEWINC", "DPETMEMO"]
+        unified_lanes = client.get_customer_lane_rates(customers)
+        print(f"Customers: {customers}")
+        print(f"Total unique lanes: {len(unified_lanes)}")
         
-        # Find highest rate lanes
-        print("\n=== Top 5 Highest Rate Lanes ===")
-        by_rate = sorted(lanes, key=lambda x: x['rate'], reverse=True)
-        for lane in by_rate[:5]:
-            print(f"  ${lane['rate']:>10,.2f} - {lane['lane_key'][:50]}")
+        active = len([l for l in unified_lanes if not l['is_expired']])
+        expired = len([l for l in unified_lanes if l['is_expired']])
+        print(f"Active: {active}, Expired: {expired}")
         
-        # Find lanes with multiple rate history
-        print("\n=== Lanes With Most Rate Changes ===")
-        by_history = sorted(lanes, key=lambda x: x['rate_count'], reverse=True)
-        for lane in by_history[:5]:
-            print(f"  {lane['rate_count']} rates - {lane['lane_key'][:50]}")
+        # Check for lanes shared by multiple customers
+        shared_lanes = [l for l in unified_lanes if len(l['customers']) > 1]
+        print(f"Lanes shared by multiple customers: {len(shared_lanes)}")
         
-        # Process multiple customers
-        print("\n=== Multiple Customers ===")
-        customers = ["HOMEATGA", "KRUSTTWA", "LOWEWINC"]
+        if shared_lanes:
+            print("\nShared lanes:")
+            for lane in shared_lanes[:5]:
+                print(f"  {lane['lane_key'][:50]}")
+                print(f"    Customers: {lane['customers']}")
+                print(f"    Most recent: ${lane['rate']} from {lane['customer_id']}")
+        
+        # Compare individual vs unified
+        print("\n=== Comparison ===")
+        individual_total = 0
         for cust in customers:
             cust_lanes = client.get_customer_lane_rates(cust)
+            individual_total += len(cust_lanes)
             active = len([l for l in cust_lanes if not l['is_expired']])
-            expired = len([l for l in cust_lanes if l['is_expired']])
-            print(f"  {cust}: {len(cust_lanes)} lanes ({active} active, {expired} expired)")
+            print(f"  {cust}: {len(cust_lanes)} lanes ({active} active)")
+        
+        print(f"\nSum of individual: {individual_total}")
+        print(f"Unified total: {len(unified_lanes)}")
+        print(f"Duplicates removed: {individual_total - len(unified_lanes)}")
+        
+        # Get only active lanes
+        print("\n=== Active Lanes Only ===")
+        active_lanes = client.get_customer_lane_rates(customers, include_expired=False)
+        print(f"Found {len(active_lanes)} active lanes across all customers")
 
 
 def example_authentication_methods():

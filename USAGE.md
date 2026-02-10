@@ -143,17 +143,24 @@ tms2_payee = client.get_payee("SUNNTRCA", company_id="TMS2")
 lanes = client.get_customer_lane_rates("HOMEATGA")
 print(f"Found {len(lanes)} unique lanes")
 
+# Multiple customers - unified list with duplicates removed
+lanes = client.get_customer_lane_rates(["HOMEATGA", "KRUSTTWA", "LOWEWINC", "DPETMEMO"])
+print(f"Found {len(lanes)} unique lanes across all customers")
+
 # Get only active (non-expired) lanes
 active_lanes = client.get_customer_lane_rates("HOMEATGA", include_expired=False)
 print(f"Found {len(active_lanes)} active lanes")
 
 # Process results
 for lane in lanes[:5]:  # Show first 5
-    print(f"{lane['lane_key']}")
+    print(f"{lane['lane_key']} ({lane['customer_id']})")
     print(f"  Rate: ${lane['rate']} ({lane['rate_type']})")
     print(f"  Effective: {lane['effective_date']}")
     print(f"  Expires: {lane['expiration_date'] or 'Open-ended'}")
     print(f"  Status: {'EXPIRED' if lane['is_expired'] else 'ACTIVE'}")
+    # Check if lane appears for multiple customers
+    if len(lane['customers']) > 1:
+        print(f"  Shared by: {lane['customers']}")
 
 # Filter and analyze
 active = [l for l in lanes if not l['is_expired']]
@@ -172,6 +179,8 @@ tms2_lanes = client.get_customer_lane_rates("HOMEATGA", company_id="TMS2")
 | Field | Description |
 |-------|-------------|
 | `lane_key` | Unique identifier: `origin (code) -> dest (code)` |
+| `customer_id` | Customer code this rate belongs to |
+| `customers` | List of all customers with rates on this lane |
 | `origin_city`, `origin_state`, `origin_value`, `origin_code` | Origin location |
 | `dest_city`, `dest_state`, `dest_value`, `dest_code` | Destination location |
 | `rate` | Most recent rate amount (float) |
