@@ -1945,6 +1945,62 @@ def example_customer_lane_rates():
         print(f"Found {len(active_lanes)} active lanes across all customers")
 
 
+def example_lane_average_revenue():
+    """Calculate weighted average revenue on a lane over a date range.
+
+    A lane is defined by the first 3 digits of the origin and destination
+    zip codes.  Revenue per load = freight_charge + qualifying accessorial
+    charges (AIF, BTF, FSC, FUEL, CFS, FSF, FSP, HAZ, SO, STOP, SFC, TM).
+    """
+    from datetime import datetime, timedelta
+
+    with TMSClient() as client:
+        # --- Basic usage: last 90 days ---
+        end = datetime.now()
+        start = end - timedelta(days=90)
+
+        print("=== Lane 983 -> 850 (last 90 days) ===")
+        result = client.get_lane_average_revenue("983", "850", start, end)
+
+        print(f"Weighted Average: ${result['weighted_average']:.2f}")
+        print(f"Simple Average:   ${result['simple_average']:.2f}")
+        print(f"Load Count:       {result['load_count']} sampled "
+              f"(of {result['total_orders']} in range)")
+        print(f"Revenue Range:    ${result['min_revenue']:.2f} "
+              f"- ${result['max_revenue']:.2f}")
+
+        # --- Per-load breakdown ---
+        print("\n=== Per-Load Detail (first 5) ===")
+        for load in result['loads'][:5]:
+            print(f"  Order {load['order_id']}: ${load['revenue']:.2f} "
+                  f"(freight=${load['freight_charge']:.2f} "
+                  f"+ acc=${load['accessorial_total']:.2f}) "
+                  f"del: {load['delivery_date']} "
+                  f"{load['origin_zip']} -> {load['dest_zip']}")
+
+        # --- Date distribution ---
+        from collections import Counter
+        months = Counter(ld['delivery_date'][:6] for ld in result['loads'])
+        print("\n=== Monthly Distribution ===")
+        for month in sorted(months):
+            print(f"  {month}: {months[month]} loads")
+
+        # --- Using YYYYMMDD strings ---
+        print("\n=== Using string dates ===")
+        result2 = client.get_lane_average_revenue(
+            "983", "850", "20250101", "20251231")
+        print(f"2025 full year: ${result2['weighted_average']:.2f} "
+              f"({result2['load_count']} loads)")
+
+        # --- Fetch ALL orders (no sampling) ---
+        print("\n=== Full fetch (no sampling) ===")
+        full = client.get_lane_average_revenue(
+            "983", "850", start, end, max_sample=0)
+        print(f"All {full['load_count']} loads: ${full['weighted_average']:.2f}")
+        print(f"vs sampled {result['load_count']} loads: "
+              f"${result['weighted_average']:.2f}")
+
+
 def example_authentication_methods():
     """Different ways to authenticate with the TMS client."""
     # Method 1: Username and password (positional)
@@ -2011,4 +2067,5 @@ if __name__ == "__main__":
     print("- example_billing_updates()")
     print("- example_settlement_search()")
     print("- example_customer_lane_rates()")
+    print("- example_lane_average_revenue()")
     print("- example_authentication_methods()")

@@ -192,6 +192,55 @@ tms2_lanes = client.get_customer_lane_rates("HOMEATGA", company_id="TMS2")
 | `bill_distance` | Lane miles if available |
 | `rate_count` | How many rate entries exist for this lane |
 
+### Lane Average Revenue
+```python
+from tms_client import TMSClient
+from datetime import datetime, timedelta
+
+with TMSClient() as client:
+    # Calculate weighted average revenue for a lane over the last 90 days
+    end = datetime.now()
+    start = end - timedelta(days=90)
+    result = client.get_lane_average_revenue("983", "850", start, end)
+
+    print(f"Weighted Average: ${result['weighted_average']:.2f}")
+    print(f"Simple Average:   ${result['simple_average']:.2f}")
+    print(f"Load Count:       {result['load_count']} (of {result['total_orders']} in range)")
+    print(f"Sampled:          {result['sampled']}")
+    print(f"Revenue Range:    ${result['min_revenue']:.2f} - ${result['max_revenue']:.2f}")
+
+    # Using YYYYMMDD date strings
+    result = client.get_lane_average_revenue("303", "770", "20250101", "20251231")
+
+    # Fetch ALL orders (no sampling) for maximum accuracy
+    result = client.get_lane_average_revenue("983", "850", start, end, max_sample=0)
+
+    # Per-load breakdown
+    for load in result['loads'][:5]:
+        print(f"  Order {load['order_id']}: ${load['revenue']:.2f} "
+              f"(freight=${load['freight_charge']:.2f} + acc=${load['accessorial_total']:.2f}) "
+              f"del: {load['delivery_date']}")
+```
+
+**How It Works**:
+- A **lane** is defined by the first 3 digits of origin and destination zip codes
+- Searches delivered orders matching `shipper.zip_code` and `consignee.zip_code` with server-side date filtering on `consignee.sched_arrive_early`
+- **Revenue per load** = `freight_charge` + qualifying accessorial charges (AIF, BTF, FSC, FUEL, CFS, FSF, FSP, HAZ, SO, STOP, SFC, TM)
+- **Weighted average** = `sum(revenue²) / sum(revenue)` — higher-revenue loads count more
+- Loads with a `$0 BTF` charge are excluded (charge not yet populated post-delivery)
+- Samples up to 60 orders evenly across the date range by default (`max_sample=60`)
+- Fetches full order details using 10 concurrent threads (~5s typical)
+
+**Returned Fields**:
+| Field | Description |
+|-------|-------------|
+| `weighted_average` | Weighted average revenue per load |
+| `simple_average` | Simple average for reference |
+| `load_count` | Number of loads in calculation |
+| `total_orders` | Total orders found in date range |
+| `sampled` | Whether results are from a sample |
+| `loads` | Per-load detail list |
+
 ### Factoring Companies
 ```python
 # Get factoring company by factor code

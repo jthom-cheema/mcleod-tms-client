@@ -627,6 +627,20 @@ class TMSClient:
         """Update billing record's ready_to_process flag, billing_user_id, and/or additional_notes. Accepts bool/str for ready_to_process ('Y'/'N'). additional_notes max 200 chars."""
         ...
     
+    LANE_REVENUE_CHARGE_CODES: frozenset
+
+    def get_lane_average_revenue(
+        self,
+        origin_zip3: str,
+        dest_zip3: str,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+        max_sample: int = 60,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Calculate the weighted average revenue on a lane (zip3 -> zip3) over a date range. Samples up to max_sample orders evenly across the date range and fetches them with threading. Revenue = freight_charge + qualifying accessorial charges. Weighted by each load's revenue."""
+        ...
+
     def close(self) -> None:
         """Close the HTTP session."""
         ...

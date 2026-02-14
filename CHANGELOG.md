@@ -4,6 +4,87 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2026-02-13] Lane Average Revenue
+
+### Added
+- **`get_lane_average_revenue()`** - Calculate the weighted average revenue earned on a lane over a date range
+
+### What It Does
+
+Calculates how much you're getting paid on a lane (defined by 3-digit zip code prefixes) over a given period. Searches delivered orders matching the origin/destination zip prefixes, fetches charge details, and computes a weighted average of per-load revenue.
+
+**Revenue per load** = `freight_charge` + sum of qualifying accessorial charges:
+`AIF`, `BTF`, `FSC`, `FUEL`, `CFS`, `FSF`, `FSP`, `HAZ`, `SO`, `STOP`, `SFC`, `TM`
+
+Other charge codes are ignored. Loads with a `$0 BTF` charge are excluded (indicates the charge hasn't been auto-populated yet post-delivery).
+
+**Weighted average** = `sum(revenue²) / sum(revenue)` — higher-revenue loads contribute proportionally more.
+
+### Performance
+
+- **Server-side date filtering** via `consignee.sched_arrive_early` with `MM/DD/YYYY:MM/DD/YYYY` range syntax
+- **Sampling**: By default, samples up to 60 orders evenly distributed across the date range (set `max_sample=0` to fetch all)
+- **Threading**: Fetches full order details for sampled orders using 10 concurrent threads
+- **Typical performance**: ~5 seconds for 60 samples from 300+ orders
+
+### Usage
+
+```python
+from tms_client import TMSClient
+from datetime import datetime, timedelta
+
+with TMSClient() as client:
+    # Basic usage with YYYYMMDD strings
+    result = client.get_lane_average_revenue("983", "850", "20250101", "20251231")
+    print(f"Weighted avg: ${result['weighted_average']:.2f}")
+    print(f"Based on {result['load_count']} loads (of {result['total_orders']} in range)")
+
+    # Using datetime objects
+    end = datetime.now()
+    start = end - timedelta(days=90)
+    result = client.get_lane_average_revenue("303", "770", start, end)
+
+    # Fetch all orders (no sampling) for maximum accuracy
+    result = client.get_lane_average_revenue("983", "850", start, end, max_sample=0)
+
+    # Per-load detail
+    for load in result['loads']:
+        print(f"  Order {load['order_id']}: ${load['revenue']:.2f} "
+              f"(freight=${load['freight_charge']:.2f} + acc=${load['accessorial_total']:.2f})")
+```
+
+### Returned Fields
+| Field | Description |
+|-------|-------------|
+| `weighted_average` | Weighted average revenue per load (float) |
+| `simple_average` | Simple (unweighted) average for reference |
+| `load_count` | Number of sampled loads used in calculation |
+| `total_orders` | Total delivered orders found in the date range |
+| `total_revenue` | Sum of all sampled load revenues |
+| `min_revenue` | Lowest single-load revenue |
+| `max_revenue` | Highest single-load revenue |
+| `origin_zip3` | Origin zip prefix used |
+| `dest_zip3` | Destination zip prefix used |
+| `start_date` | Start date (YYYYMMDD) |
+| `end_date` | End date (YYYYMMDD) |
+| `sampled` | Whether results are from a sample (bool) |
+| `loads` | List of per-load dicts with `order_id`, `freight_charge`, `accessorial_total`, `revenue`, `delivery_date`, `origin_zip`, `dest_zip` |
+
+### Key Implementation Notes
+- Lane = first 3 digits of origin zip -> first 3 digits of destination zip
+- Uses `consignee_stop_id` to find the true consignee stop (handles multi-stop orders correctly)
+- Delivery date = consignee stop's `sched_arrive_early`
+- Server-side date filter with client-side guard for timezone edge cases
+- Loads with `$0 BTF` are skipped (charge not yet populated post-delivery)
+- `max_sample` defaults to 60; set to 0 for exhaustive fetch
+- `requests.Session` is shared across threads (thread-safe for HTTP requests)
+
+### See Also
+- `examples.py` → `example_lane_average_revenue()`
+- `USAGE.md` → Lane Average Revenue section
+
+---
+
 ## [2026-02-09] Customer Lane Rates
 
 ### Added
@@ -629,6 +710,7 @@ else:
 | `search_deductions()` | `/deductions/search` | Basic or API Key |
 | `search_deductions_history()` | `/deductions/history` | **Basic Auth Only** |
 | `search_deductions_by_movement()` | Both above | Mixed |
+| `get_lane_average_revenue()` | `/orders/search` + `/orders/{id}` | Basic or API Key |
 
 ---
 

@@ -3999,6 +3999,319 @@ class TMSClient:
         
         return results
 
+    # Qualifying accessorial charge codes for lane revenue calculation
+    LANE_REVENUE_CHARGE_CODES = frozenset([
+        'AIF', 'BTF', 'FSC', 'FUEL', 'CFS', 'FSF', 'FSP', 'HAZ',
+        'SO', 'STOP', 'SFC', 'TM',
+    ])
+
+    def get_lane_average_revenue(
+        self,
+        origin_zip3: str,
+        dest_zip3: str,
+        start_date: Union[str, datetime],
+        end_date: Union[str, datetime],
+        max_sample: int = 60,
+        company_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Calculate the weighted average revenue on a lane over a date range.
+
+        A lane is defined by the first three digits of the origin and
+        destination zip codes. The method searches for delivered orders
+        matching those zip prefixes, filters by the consignee stop's
+        ``sched_arrive_early`` date, and computes a weighted average of
+        the per-load revenue.
+
+        Revenue per load = ``freight_charge`` + sum of qualifying
+        accessorial charges (AIF, BTF, FSC, FUEL, CFS, FSF, FSP, HAZ,
+        SO, STOP, SFC, TM). Other charge codes are ignored.
+
+        The average is weighted by each load's calculated revenue so that
+        higher-revenue loads contribute proportionally more:
+        ``weighted_avg = sum(revenue_i²) / sum(revenue_i)``
+
+        Args:
+            origin_zip3: First three digits of the origin (shipper) zip
+                code, e.g. ``"303"``.
+            dest_zip3: First three digits of the destination (consignee)
+                zip code, e.g. ``"770"``.
+            start_date: Inclusive start of the delivery window. Accepts a
+                ``datetime`` object or a string in ``YYYYMMDD`` format.
+            end_date: Inclusive end of the delivery window. Accepts a
+                ``datetime`` object or a string in ``YYYYMMDD`` format.
+            max_sample: Maximum number of orders to fetch full details
+                for. Orders are sampled evenly across the date range.
+                Set to ``0`` to fetch all (default: 60).
+            company_id: Optional company ID override.
+
+        Returns:
+            Dict with:
+                - weighted_average: Weighted average revenue (float)
+                - simple_average: Simple (unweighted) average for reference
+                - load_count: Number of sampled loads used in calculation
+                - total_orders: Total delivered orders found on the lane
+                - total_revenue: Sum of all sampled load revenues
+                - min_revenue: Lowest single-load revenue
+                - max_revenue: Highest single-load revenue
+                - origin_zip3: Echo of the origin prefix used
+                - dest_zip3: Echo of the destination prefix used
+                - start_date: Start date used (YYYYMMDD)
+                - end_date: End date used (YYYYMMDD)
+                - sampled: Whether results are from a sample (bool)
+                - loads: List of per-load detail dicts (order_id,
+                  freight_charge, accessorial_total, revenue,
+                  delivery_date, origin_zip, dest_zip)
+
+        Raises:
+            ValueError: If zip prefixes are not exactly 3 digits or if
+                no qualifying loads are found in the date range.
+
+        Examples:
+            >>> result = client.get_lane_average_revenue("303", "770",
+            ...     "20250101", "20251231")
+            >>> print(f"Weighted avg: ${result['weighted_average']:.2f}")
+            >>> print(f"Based on {result['load_count']} loads")
+
+            >>> from datetime import datetime
+            >>> result = client.get_lane_average_revenue(
+            ...     "950", "300",
+            ...     datetime(2025, 1, 1), datetime(2025, 12, 31),
+            ...     max_sample=0)  # fetch all, no sampling
+        """
+        from datetime import datetime as _dt
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        import math
+
+        # --- Validate inputs ------------------------------------------------
+        origin_zip3 = str(origin_zip3).strip()
+        dest_zip3 = str(dest_zip3).strip()
+        if not (origin_zip3.isdigit() and len(origin_zip3) == 3):
+            raise ValueError(f"origin_zip3 must be exactly 3 digits, got '{origin_zip3}'")
+        if not (dest_zip3.isdigit() and len(dest_zip3) == 3):
+            raise ValueError(f"dest_zip3 must be exactly 3 digits, got '{dest_zip3}'")
+
+        # Normalize dates to YYYYMMDD strings
+        if isinstance(start_date, _dt):
+            start_str = start_date.strftime("%Y%m%d")
+        else:
+            start_str = str(start_date).strip()[:8]
+        if isinstance(end_date, _dt):
+            end_str = end_date.strftime("%Y%m%d")
+        else:
+            end_str = str(end_date).strip()[:8]
+
+        # --- Step 1: Search with server-side date filter -----------------------
+        # The API supports date range filtering on stop dates using
+        # MM/DD/YYYY:MM/DD/YYYY colon-separated syntax.
+        start_mdy = f"{start_str[4:6]}/{start_str[6:8]}/{start_str[:4]}"
+        end_mdy = f"{end_str[4:6]}/{end_str[6:8]}/{end_str[:4]}"
+
+        PAGE_SIZE = 500
+        in_range_ids = []   # (order_id, delivery_ymd) tuples
+        offset = 0
+        search_filters = {
+            "orders.status": "D",
+            "shipper.zip_code": f"{origin_zip3}*",
+            "consignee.zip_code": f"{dest_zip3}*",
+            "consignee.sched_arrive_early": f"{start_mdy}:{end_mdy}",
+        }
+
+        while True:
+            page = self.search_orders(
+                filters=search_filters,
+                company_id=company_id,
+                record_length=PAGE_SIZE,
+                record_offset=offset,
+            )
+            if not page:
+                break
+
+            for order_summary in page:
+                oid = order_summary.get("id")
+                if not oid:
+                    continue
+
+                # Find the true consignee stop via consignee_stop_id,
+                # falling back to the last SO/SD stop.
+                stops = order_summary.get("stops", [])
+                consignee_sid = order_summary.get("consignee_stop_id")
+                consignee_stop = None
+                if consignee_sid:
+                    for stop in stops:
+                        if stop.get("id") == consignee_sid:
+                            consignee_stop = stop
+                            break
+                if consignee_stop is None:
+                    for stop in reversed(stops):
+                        if stop.get("stop_type") in ("SO", "SD"):
+                            consignee_stop = stop
+                            break
+
+                delivery_ymd = None
+                if consignee_stop:
+                    raw = consignee_stop.get("sched_arrive_early", "")
+                    if raw:
+                        delivery_ymd = str(raw)[:8]
+
+                # Client-side date guard (server filter can be slightly loose)
+                if not delivery_ymd:
+                    continue
+                if delivery_ymd < start_str or delivery_ymd > end_str:
+                    continue
+
+                in_range_ids.append((str(oid), delivery_ymd))
+
+            if len(page) < PAGE_SIZE:
+                break
+            offset += PAGE_SIZE
+
+        if not in_range_ids:
+            raise ValueError(
+                f"No delivered orders found for lane {origin_zip3}* -> {dest_zip3}* "
+                f"between {start_str} and {end_str}"
+            )
+
+        # --- Step 2: Sample evenly across the date range --------------------
+        # Sort by delivery date so even spacing gives date-balanced sample.
+        in_range_ids.sort(key=lambda x: x[1])
+        total_in_range = len(in_range_ids)
+
+        if max_sample > 0 and total_in_range > max_sample:
+            step = total_in_range / max_sample
+            sampled = [
+                in_range_ids[int(i * step)]
+                for i in range(max_sample)
+            ]
+            is_sampled = True
+        else:
+            sampled = in_range_ids
+            is_sampled = False
+
+        sampled_ids = [s[0] for s in sampled]
+
+        # --- Step 3: Fetch full order details with threading ----------------
+        qualifying_charges = self.LANE_REVENUE_CHARGE_CODES
+
+        def _fetch_and_parse(order_id: str) -> Optional[Dict[str, Any]]:
+            """Fetch a single order and extract revenue data."""
+            try:
+                order = self.get_load_json(order_id, company_id=company_id)
+            except Exception:
+                return None
+
+            # Find the true consignee stop via consignee_stop_id,
+            # falling back to the last SO/SD stop.
+            stops = order.get("stops", [])
+            consignee_sid = order.get("consignee_stop_id")
+            consignee_stop = None
+            if consignee_sid:
+                for stop in stops:
+                    if stop.get("id") == consignee_sid:
+                        consignee_stop = stop
+                        break
+            if consignee_stop is None:
+                for stop in reversed(stops):
+                    if stop.get("stop_type") in ("SO", "SD"):
+                        consignee_stop = stop
+                        break
+            if consignee_stop is None:
+                return None
+
+            raw_date = consignee_stop.get("sched_arrive_early", "")
+            delivery_ymd = str(raw_date)[:8] if raw_date else ""
+
+            # Client-side date guard
+            if not delivery_ymd or delivery_ymd < start_str or delivery_ymd > end_str:
+                return None
+
+            # Calculate revenue
+            freight = 0.0
+            raw_freight = order.get("freight_charge")
+            if raw_freight is not None:
+                try:
+                    freight = float(raw_freight)
+                except (ValueError, TypeError):
+                    pass
+
+            accessorial_total = 0.0
+            for charge in order.get("otherCharges", []):
+                code = (charge.get("charge_id") or "").strip().upper()
+                if code in qualifying_charges:
+                    try:
+                        amt = float(charge.get("amount", 0))
+                    except (ValueError, TypeError):
+                        amt = 0.0
+                    # A $0 BTF means the charge hasn't been populated
+                    # yet (filled automatically post-delivery). Skip
+                    # the entire load so we don't understate revenue.
+                    if code == "BTF" and amt == 0:
+                        return None
+                    accessorial_total += amt
+
+            revenue = freight + accessorial_total
+            if revenue <= 0:
+                return None
+
+            origin_zip = ""
+            for stop in stops:
+                if stop.get("stop_type") == "PU":
+                    origin_zip = (stop.get("zip_code") or "")[:5]
+                    break
+
+            return {
+                "order_id": order_id,
+                "freight_charge": freight,
+                "accessorial_total": round(accessorial_total, 2),
+                "revenue": round(revenue, 2),
+                "delivery_date": delivery_ymd,
+                "origin_zip": origin_zip,
+                "dest_zip": (consignee_stop.get("zip_code") or "")[:5],
+            }
+
+        loads = []
+        with ThreadPoolExecutor(max_workers=10) as pool:
+            futures = {
+                pool.submit(_fetch_and_parse, oid): oid
+                for oid in sampled_ids
+            }
+            for future in as_completed(futures):
+                result = future.result()
+                if result is not None:
+                    loads.append(result)
+
+        if not loads:
+            raise ValueError(
+                f"No qualifying loads with revenue > 0 found for lane "
+                f"{origin_zip3}* -> {dest_zip3}* between {start_str} and {end_str}"
+            )
+
+        # Sort by delivery date for consistent output
+        loads.sort(key=lambda x: x["delivery_date"])
+
+        # --- Step 4: Calculate weighted average ------------------------------
+        revenues = [ld["revenue"] for ld in loads]
+        total_revenue = sum(revenues)
+        sum_revenue_sq = sum(r * r for r in revenues)
+        weighted_avg = sum_revenue_sq / total_revenue
+        simple_avg = total_revenue / len(revenues)
+
+        return {
+            "weighted_average": round(weighted_avg, 2),
+            "simple_average": round(simple_avg, 2),
+            "load_count": len(loads),
+            "total_orders": total_in_range,
+            "total_revenue": round(total_revenue, 2),
+            "min_revenue": round(min(revenues), 2),
+            "max_revenue": round(max(revenues), 2),
+            "origin_zip3": origin_zip3,
+            "dest_zip3": dest_zip3,
+            "start_date": start_str,
+            "end_date": end_str,
+            "sampled": is_sampled,
+            "loads": loads,
+        }
+
     def close(self) -> None:
         """Close the session."""
         self.session.close()
