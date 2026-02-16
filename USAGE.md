@@ -825,6 +825,40 @@ for bill in bills:
     print(f"Total: ${bill['total_charges_n']}")
 ```
 
+### Receivables History
+```python
+# Search by invoice number
+items = client.search_receivables(invoice_no_string="5229066")
+
+# Search by customer with date filter
+items = client.search_receivables(customer_id="TARGMIM1", bill_date=">=t-30")
+
+# Search by order number
+items = client.search_receivables(order_id="5229066")
+
+# Include GL journal entries
+items = client.search_receivables(invoice_no_string="5229066", include_journal_entries=True)
+
+# Auto-paginate large result sets
+all_items = client.search_receivables(
+    customer_id="TARGMIM1",
+    ship_date=">=t-100",
+    auto_paginate=True
+)
+
+# Additional filters from open_item table
+items = client.search_receivables(reference_number="2000947779", record_type="P")
+
+# Process results
+for item in items:
+    print(f"Invoice: {item['invoice_no_string']}")
+    print(f"Customer: {item['customer_id']}")
+    print(f"Amount: ${item['amount']}")
+    print(f"Reference: {item['reference_number']}")
+```
+
+**Note**: `search_receivables()` queries the `open_item` table (Receivables History window in LoadMaster) via `GET /billing/cashReceipts`. It returns posted receivable records including payments, invoices, and credit memos.
+
 ### Web Framework Integration
 ```python
 # Flask example

@@ -2435,6 +2435,166 @@ class TMSClient:
 
         return return_rows
 
+    def search_receivables(
+        self,
+        invoice_no_string: Optional[str] = None,
+        invoice_no: Optional[int] = None,
+        customer_id: Optional[str] = None,
+        order_id: Optional[str] = None,
+        bill_date: Union[str, datetime, None] = None,
+        ship_date: Union[str, datetime, None] = None,
+        include_journal_entries: Optional[bool] = None,
+        company_id: Optional[str] = None,
+        record_length: Optional[int] = None,
+        record_offset: Optional[int] = None,
+        auto_paginate: bool = False,
+        **additional_filters: Any,
+    ) -> List[Dict[str, Any]]:
+        """
+        Search receivables history (open_item table) via the cash receipts endpoint.
+
+        Retrieves a list of open items (posted receivables) matching the given
+        request parameters. This corresponds to the "Receivables History" window
+        in McLeod LoadMaster.
+
+        Args:
+            invoice_no_string: Invoice number as string (e.g., "5229066"). Supports
+                wildcards (e.g., "5229*").
+            invoice_no: Invoice number as integer
+            customer_id: Customer code (e.g., "TARGMIM1")
+            order_id: Order number (e.g., "5229066"). Supports wildcards.
+            bill_date: Bill date filter. Supports relative dates (e.g., ">=t-30"),
+                datetime objects, or API format strings.
+            ship_date: Ship date filter. Same formats as bill_date.
+            include_journal_entries: Whether to include GL journal detail records
+            company_id: Optional override for Company ID header
+            record_length: Optional page size (default 100, max 100)
+            record_offset: Optional offset (NOTE: API may ignore; use auto_paginate)
+            auto_paginate: When True, fetches all pages using cursor-based pagination.
+            **additional_filters: Additional search criteria from open_item table.
+                Examples: reference_number="2000947779", record_type="I",
+                is_split_bill="N", gl_date=">=t-30"
+
+        Returns:
+            List of RowOpenItem objects (open_item records) matching the criteria.
+            Each record includes fields like: invoice_no_string, invoice_no,
+            amount, customer_id, bill_date, ship_date, gl_date, reference_number,
+            order_id, record_type, remaining_credit_balance, etc.
+
+        Examples:
+            >>> # Search by invoice number
+            >>> items = client.search_receivables(invoice_no_string="5229066")
+
+            >>> # Search by customer
+            >>> items = client.search_receivables(
+            ...     customer_id="TARGMIM1",
+            ...     bill_date=">=t-30"
+            ... )
+
+            >>> # Search by order with journal entries
+            >>> items = client.search_receivables(
+            ...     order_id="5229066",
+            ...     include_journal_entries=True
+            ... )
+
+            >>> # Search with auto-pagination
+            >>> all_items = client.search_receivables(
+            ...     customer_id="TARGMIM1",
+            ...     ship_date=">=t-100",
+            ...     auto_paginate=True
+            ... )
+        """
+        import sys
+
+        params: Dict[str, Any] = {}
+
+        # Handle named parameters
+        if invoice_no_string is not None:
+            params["invoice_no_string"] = str(invoice_no_string)
+        if invoice_no is not None:
+            params["invoice_no"] = int(invoice_no)
+        if customer_id is not None:
+            params["customer_id"] = str(customer_id)
+        if order_id is not None:
+            params["order_id"] = str(order_id)
+
+        # Handle date parameters
+        for date_name, date_val in [("bill_date", bill_date), ("ship_date", ship_date)]:
+            if date_val is not None:
+                if isinstance(date_val, datetime):
+                    dt = date_val
+                    if dt.tzinfo is None:
+                        from datetime import timezone
+                        dt = dt.replace(tzinfo=timezone(timedelta(hours=-7)))
+                    params[date_name] = dt.strftime("%Y%m%d%H%M%S%z")
+                else:
+                    params[date_name] = str(date_val)
+
+        # Add optional parameters
+        if include_journal_entries is not None:
+            params["includeJournalEntries"] = bool(include_journal_entries)
+
+        # Enforce 100-record pages by default for consistency
+        page_size = int(record_length) if record_length is not None else 100
+        params["recordLength"] = page_size
+        if record_offset is not None:
+            params["recordOffset"] = int(record_offset)
+
+        # Add any additional filters from open_item table
+        params.update(additional_filters)
+
+        # Auto-pagination using cursor-based 'id > last_id'
+        if auto_paginate:
+            all_rows: List[Dict[str, Any]] = []
+            max_pages = 100  # Safety limit (10,000 records max)
+            last_id = None
+
+            for page_num in range(1, max_pages + 1):
+                page_params = dict(params)
+
+                if last_id is not None:
+                    page_params["id"] = f">{last_id}"
+
+                page = self.get_json("/billing/cashReceipts", company_id=company_id, params=page_params)
+
+                if not isinstance(page, list) or len(page) == 0:
+                    break
+
+                all_rows.extend(page)
+
+                if len(page) != page_size:
+                    if len(page) > page_size:
+                        print(
+                            f"WARNING: API ignored recordLength={page_size} and returned {len(page)} rows; "
+                            f"treating as last page.",
+                            file=sys.stderr,
+                        )
+                    break
+
+                last_id = page[-1].get('id')
+                if not last_id:
+                    print(f"WARNING: No 'id' field in response, cannot paginate further",
+                          file=sys.stderr)
+                    break
+
+            return all_rows
+
+        # Single-page request (no auto-pagination)
+        return_rows = self.get_json("/billing/cashReceipts", company_id=company_id, params=params)
+        if not isinstance(return_rows, list):
+            return []
+
+        # Enforce page_size on single-page calls for consistent pagination
+        if len(return_rows) > page_size:
+            print(
+                f"WARNING: API ignored recordLength={page_size} and returned {len(return_rows)} rows; "
+                f"trimming to first {page_size} for pagination consistency.",
+                file=sys.stderr,
+            )
+            return_rows = return_rows[:page_size]
+
+        return return_rows
+
     def get_billing(
         self,
         billing_id: str,

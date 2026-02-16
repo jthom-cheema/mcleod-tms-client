@@ -807,4 +807,53 @@ with TMSClient("username", "password") as client:
         print(f"Total: ${bill.get('total_charges_n')}")
 ```
 
+### Receivables History Search
+
+```python
+from tms_client import TMSClient
+
+with TMSClient("username", "password") as client:
+    # Search by invoice number
+    items = client.search_receivables(invoice_no_string="5229066")
+
+    # Search by customer code with date range
+    items = client.search_receivables(customer_id="TARGMIM1", bill_date=">=t-30")
+
+    # Search by order number
+    items = client.search_receivables(order_id="5229066")
+
+    # Include GL journal entries
+    items = client.search_receivables(
+        invoice_no_string="5229066",
+        include_journal_entries=True
+    )
+
+    # Auto-paginate for large result sets
+    all_items = client.search_receivables(
+        customer_id="TARGMIM1",
+        ship_date=">=t-100",
+        auto_paginate=True
+    )
+
+    # Use additional filters from the open_item table
+    items = client.search_receivables(
+        reference_number="2000947779",
+        record_type="P"
+    )
+
+    # Process results
+    for item in items:
+        print(f"Invoice: {item.get('invoice_no_string')}")
+        print(f"Customer: {item.get('customer_id')}")
+        print(f"Amount: ${item.get('amount')}")
+        print(f"Reference: {item.get('reference_number')}")
+        print(f"Bill Date: {item.get('bill_date')}")
+```
+
+**Receivables History Notes**:
+- Queries the `open_item` table via `GET /billing/cashReceipts` (corresponds to the "Receivables History" window in LoadMaster)
+- Supports filtering by `invoice_no_string`, `invoice_no`, `customer_id`, `order_id`, `bill_date`, `ship_date`, `reference_number`, `record_type`, `is_split_bill`, and more
+- Returns `RowOpenItem` objects with fields like `amount`, `remaining_credit_balance`, `gl_date`, `post_module`, `source`, etc.
+- Use `auto_paginate=True` when expecting more than 100 results
+
 **Search Notes**: All search functions return a list of matching objects. They support partial matching and empty queries may return all records (depending on API configuration).

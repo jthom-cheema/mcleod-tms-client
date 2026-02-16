@@ -4,6 +4,39 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2026-02-16] Receivables History Search
+
+### Added
+- **`search_receivables()`** - Search the receivables history (open_item table) by invoice number, customer, order, date, and more
+
+### What It Does
+
+Queries posted receivable records via `GET /billing/cashReceipts`, corresponding to the "Receivables History" window in LoadMaster. Returns `RowOpenItem` objects from the `open_item` table.
+
+### Key Parameters
+- `invoice_no_string` - Invoice number (supports wildcards, e.g., `"5229*"`)
+- `customer_id` - Customer code (e.g., `"TARGMIM1"`)
+- `order_id` - Order number
+- `bill_date`, `ship_date` - Date filters (supports relative dates like `">=t-30"`)
+- `include_journal_entries` - Include GL journal detail records
+- `auto_paginate` - Fetch all pages for large result sets
+- `**additional_filters` - Any field from the `open_item` table (e.g., `reference_number`, `record_type`)
+
+### Usage
+```python
+# Search by invoice number
+items = client.search_receivables(invoice_no_string="5229066")
+
+# Search by customer with date range
+items = client.search_receivables(customer_id="TARGMIM1", bill_date=">=t-30")
+```
+
+### See Also
+- `README.md` → Receivables History Search section
+- `USAGE.md` → Receivables History section
+
+---
+
 ## [2026-02-13] Lane Average Revenue
 
 ### Added
