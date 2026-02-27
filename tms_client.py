@@ -198,19 +198,31 @@ class TMSClient:
             response.raise_for_status()
             return response
         except requests.exceptions.HTTPError as e:
+            # Extract response body for diagnostics — McLeod often includes
+            # useful detail (e.g. missing role/permission) in the response text.
+            try:
+                error_body = response.text.strip()
+            except Exception:
+                error_body = ""
+
+            endpoint_hint = endpoint.lstrip('/')
+
             if response.status_code == 401:
-                raise Exception(f"Authentication failed (401): Invalid username or password")
+                detail = error_body or "Invalid credentials or insufficient role/permissions"
+                raise Exception(
+                    f"HTTP 401 Unauthorized on /{endpoint_hint}: {detail}"
+                )
             elif response.status_code == 403:
-                raise Exception(f"Access denied (403): Insufficient permissions for this resource")
+                detail = error_body or "Insufficient permissions for this resource"
+                raise Exception(
+                    f"HTTP 403 Forbidden on /{endpoint_hint}: {detail}"
+                )
             elif response.status_code == 415:
-                # Include response body for 415 errors to debug content type issues
-                try:
-                    error_details = response.text
-                    raise Exception(f"HTTP 415 Unsupported Media Type: {error_details}")
-                except:
-                    raise Exception(f"HTTP 415 Unsupported Media Type: {e}")
+                detail = error_body or str(e)
+                raise Exception(f"HTTP 415 Unsupported Media Type: {detail}")
             else:
-                raise Exception(f"HTTP {response.status_code}: {e}")
+                detail = f" - {error_body}" if error_body else ""
+                raise Exception(f"HTTP {response.status_code} on /{endpoint_hint}: {e}{detail}")
         except requests.exceptions.RequestException as e:
             raise Exception(f"API request failed: {e}")
     
