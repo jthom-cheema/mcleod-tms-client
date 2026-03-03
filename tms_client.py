@@ -3621,11 +3621,6 @@ class TMSClient:
         history deductions have been processed and include payment information like
         check_date, check_number, and process_status.
 
-        ⚠️ **IMPORTANT**: This endpoint requires Basic Authentication (username/password)
-        and does NOT accept API key authentication. This is a server-side limitation
-        of the McLeod TMS API. If you initialize the client with an API key, this
-        function will raise a clear error message explaining the requirement.
-
         Args:
             filters: Mapping of query keys to values. Keys should include the
                 proper table/field prefix as required by the API
@@ -3647,13 +3642,8 @@ class TMSClient:
         Returns:
             List of RowDrsDeductHist objects returned by the search.
 
-        Raises:
-            Exception: If authentication fails with API key, provides a helpful error
-                message explaining that Basic Auth is required.
-
         Examples:
-            >>> # Search deduction history by movement ID (requires username/password)
-            >>> client = TMSClient("username", "password")  # Not api_key!
+            >>> # Search deduction history by movement ID
             >>> client.search_deductions_history({"drs_deduct_hist.movement_id": "1180935"})
             
             >>> # Search by payee and transaction date
@@ -3709,67 +3699,55 @@ class TMSClient:
         if record_offset is not None:
             params["recordOffset"] = int(record_offset)
 
-        # IMPORTANT: This endpoint requires Basic Auth on many servers.
-        # Also: some server versions ignore query filters/paging on /deductions/history.
+        # Some server versions ignore query filters/paging on /deductions/history.
         # We'll first try /deductions/history/search (if available), then fall back,
         # and finally apply a client-side safety filter/limit.
-        try:
-            # Prefer the search endpoint if it exists (consistent with /settlements/history/search)
-            try_endpoints = ("/deductions/history/search", "/deductions/history")
-            last_exc: Optional[Exception] = None
-            results: Any = []
-            used_endpoint: Optional[str] = None
-            for ep in try_endpoints:
-                try:
-                    results = self.get_json(ep, company_id=company_id, params=params)
-                    last_exc = None
-                    used_endpoint = ep
-                    break
-                except Exception as inner:
-                    last_exc = inner
-                    # If search endpoint doesn't exist, fall back
-                    if "HTTP 404" in str(inner) and ep.endswith("/search"):
-                        continue
-                    raise
-            if last_exc is not None:
-                raise last_exc
 
-            rows = results if isinstance(results, list) else []
+        # Prefer the search endpoint if it exists (consistent with /settlements/history/search)
+        try_endpoints = ("/deductions/history/search", "/deductions/history")
+        last_exc: Optional[Exception] = None
+        results: Any = []
+        used_endpoint: Optional[str] = None
+        for ep in try_endpoints:
+            try:
+                results = self.get_json(ep, company_id=company_id, params=params)
+                last_exc = None
+                used_endpoint = ep
+                break
+            except Exception as inner:
+                last_exc = inner
+                # If search endpoint doesn't exist, fall back
+                if "HTTP 404" in str(inner) and ep.endswith("/search"):
+                    continue
+                raise
+        if last_exc is not None:
+            raise last_exc
 
-            # Hard safety cap: if the server ignored filters/paging, it may return a massive
-            # unbounded list. When the caller asked for a bounded page (record_length),
-            # treat oversized responses as untrusted and return [].
-            # (Correctness-first: "no data" is safer than "wrong data".)
-            untrusted_hard_cap = 1000
-            if record_length is not None and filters and len(rows) > untrusted_hard_cap:
-                logger.warning(
-                    "Untrusted deductions history response: endpoint=%s rows=%s filters=%s recordLength=%s. "
-                    "Assuming server ignored filters/paging; returning [].",
-                    used_endpoint,
-                    len(rows),
-                    list(filters.keys()),
-                    record_length,
-                )
-                return []
+        rows = results if isinstance(results, list) else []
 
-            return self._apply_client_side_filters_and_paging(
-                rows=rows,
-                filters=filters,
-                record_length=record_length,
-                record_offset=record_offset,
-                discard_rows_missing_filtered_field=True,
+        # Hard safety cap: if the server ignored filters/paging, it may return a massive
+        # unbounded list. When the caller asked for a bounded page (record_length),
+        # treat oversized responses as untrusted and return [].
+        # (Correctness-first: "no data" is safer than "wrong data".)
+        untrusted_hard_cap = 1000
+        if record_length is not None and filters and len(rows) > untrusted_hard_cap:
+            logger.warning(
+                "Untrusted deductions history response: endpoint=%s rows=%s filters=%s recordLength=%s. "
+                "Assuming server ignored filters/paging; returning [].",
+                used_endpoint,
+                len(rows),
+                list(filters.keys()),
+                record_length,
             )
-        except Exception as e:
-            error_msg = str(e)
-            # Check if it's a 401 auth error and we're using API key
-            if "401" in error_msg and self.api_key:
-                raise Exception(
-                    f"The /deductions/history endpoint requires Basic Authentication (username/password), "
-                    f"not API key authentication. Please initialize TMSClient with username and password "
-                    f"instead of api_key to use this endpoint. Original error: {error_msg}"
-                )
-            # Re-raise other errors as-is
-            raise
+            return []
+
+        return self._apply_client_side_filters_and_paging(
+            rows=rows,
+            filters=filters,
+            record_length=record_length,
+            record_offset=record_offset,
+            discard_rows_missing_filtered_field=True,
+        )
 
     def search_deductions_by_movement(
         self,

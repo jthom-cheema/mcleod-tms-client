@@ -670,7 +670,6 @@ history = client.search_settlement_history(
 - **`search_deductions_by_movement()`** - Convenience method with auto-fallback to history
 
 ### Known Issues
-- **`/deductions/history` requires Basic Auth** - API key authentication is rejected with 401. Must use username/password.
 - **Server-side filtering/paging may be ignored** - In some environments `/deductions/history` ignores filters (movement_id, settlement_id, etc.) and may return huge unbounded lists; `recordLength`/`recordOffset` may be ignored in practice. Treat history responses as untrusted unless proven scoped.
 
 ### Files Changed
@@ -741,15 +740,15 @@ else:
 | `search_settlement_history()` | `/settlements/history/search` | Basic or API Key |
 | `is_movement_paid()` | `/settlements/history/search` | Basic or API Key |
 | `search_deductions()` | `/deductions/search` | Basic or API Key |
-| `search_deductions_history()` | `/deductions/history` | **Basic Auth Only** |
-| `search_deductions_by_movement()` | Both above | Mixed |
+| `search_deductions_history()` | `/deductions/history` | Basic or API Key |
+| `search_deductions_by_movement()` | Both above | Basic or API Key |
 | `get_lane_average_revenue()` | `/orders/search` + `/orders/{id}` | Basic or API Key |
 
 ---
 
 ## Tips for Future Development
 
-1. **Always test both auth methods** - Some endpoints reject API keys (e.g., `/deductions/history`)
+1. **Always test both auth methods** - Verify endpoints work with your chosen auth method
 2. **Check sample JSON files** - Located in `samples/` directory, organized by endpoint
 3. **Server-side filtering varies** - Some endpoints ignore certain filters; may need client-side filtering
 4. **Date format** - McLeod uses `YYYYMMDDHHMMSS-0700` format (e.g., `20251126000000-0800`)
