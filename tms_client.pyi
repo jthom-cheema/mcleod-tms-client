@@ -638,7 +638,7 @@ class TMSClient:
         max_sample: int = 60,
         company_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Calculate the weighted average revenue on a lane (zip3 -> zip3) over a date range. Samples up to max_sample orders evenly across the date range and fetches them with threading. Revenue = freight_charge + qualifying accessorial charges. Weighted by each load's revenue."""
+        """Calculate the 10% trimmed mean revenue on a lane (zip3 -> zip3) over a date range. Samples up to max_sample orders evenly across the date range and fetches them with threading. Revenue = freight_charge + qualifying accessorial charges."""
         ...
 
     def close(self) -> None:

@@ -40,18 +40,18 @@ items = client.search_receivables(customer_id="TARGMIM1", bill_date=">=t-30")
 ## [2026-02-13] Lane Average Revenue
 
 ### Added
-- **`get_lane_average_revenue()`** - Calculate the weighted average revenue earned on a lane over a date range
+- **`get_lane_average_revenue()`** - Calculate the trimmed mean revenue earned on a lane over a date range
 
 ### What It Does
 
-Calculates how much you're getting paid on a lane (defined by 3-digit zip code prefixes) over a given period. Searches delivered orders matching the origin/destination zip prefixes, fetches charge details, and computes a weighted average of per-load revenue.
+Calculates how much you're getting paid on a lane (defined by 3-digit zip code prefixes) over a given period. Searches delivered orders matching the origin/destination zip prefixes, fetches charge details, and computes a 10% trimmed mean of per-load revenue (discards the lowest and highest 10% before averaging).
 
 **Revenue per load** = `freight_charge` + sum of qualifying accessorial charges:
 `AIF`, `BTF`, `FSC`, `FUEL`, `CFS`, `FSF`, `FSP`, `HAZ`, `SO`, `STOP`, `SFC`, `TM`
 
 Other charge codes are ignored. Loads with a `$0 BTF` charge are excluded (indicates the charge hasn't been auto-populated yet post-delivery).
 
-**Weighted average** = `sum(revenue²) / sum(revenue)` — higher-revenue loads contribute proportionally more.
+**10% trimmed mean** — the lowest and highest 10% of load revenues are discarded before averaging, reducing the influence of outliers.
 
 ### Performance
 
@@ -69,7 +69,7 @@ from datetime import datetime, timedelta
 with TMSClient() as client:
     # Basic usage with YYYYMMDD strings
     result = client.get_lane_average_revenue("983", "850", "20250101", "20251231")
-    print(f"Weighted avg: ${result['weighted_average']:.2f}")
+    print(f"Trimmed mean: ${result['trimmed_mean']:.2f}")
     print(f"Based on {result['load_count']} loads (of {result['total_orders']} in range)")
 
     # Using datetime objects
@@ -89,7 +89,7 @@ with TMSClient() as client:
 ### Returned Fields
 | Field | Description |
 |-------|-------------|
-| `weighted_average` | Weighted average revenue per load (float) |
+| `trimmed_mean` | 10% trimmed mean revenue per load (float) |
 | `simple_average` | Simple (unweighted) average for reference |
 | `load_count` | Number of sampled loads used in calculation |
 | `total_orders` | Total delivered orders found in the date range |

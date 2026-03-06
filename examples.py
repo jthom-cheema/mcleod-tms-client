@@ -1946,7 +1946,7 @@ def example_customer_lane_rates():
 
 
 def example_lane_average_revenue():
-    """Calculate weighted average revenue on a lane over a date range.
+    """Calculate trimmed mean revenue on a lane over a date range.
 
     A lane is defined by the first 3 digits of the origin and destination
     zip codes.  Revenue per load = freight_charge + qualifying accessorial
@@ -1962,7 +1962,7 @@ def example_lane_average_revenue():
         print("=== Lane 983 -> 850 (last 90 days) ===")
         result = client.get_lane_average_revenue("983", "850", start, end)
 
-        print(f"Weighted Average: ${result['weighted_average']:.2f}")
+        print(f"Trimmed Mean:     ${result['trimmed_mean']:.2f}")
         print(f"Simple Average:   ${result['simple_average']:.2f}")
         print(f"Load Count:       {result['load_count']} sampled "
               f"(of {result['total_orders']} in range)")
@@ -1990,16 +1990,16 @@ def example_lane_average_revenue():
         print("\n=== Using string dates ===")
         result2 = client.get_lane_average_revenue(
             "983", "850", "20250101", "20251231")
-        print(f"2025 full year: ${result2['weighted_average']:.2f} "
+        print(f"2025 full year: ${result2['trimmed_mean']:.2f} "
               f"({result2['load_count']} loads)")
 
         # --- Fetch ALL orders (no sampling) ---
         print("\n=== Full fetch (no sampling) ===")
         full = client.get_lane_average_revenue(
             "983", "850", start, end, max_sample=0)
-        print(f"All {full['load_count']} loads: ${full['weighted_average']:.2f}")
+        print(f"All {full['load_count']} loads: ${full['trimmed_mean']:.2f}")
         print(f"vs sampled {result['load_count']} loads: "
-              f"${result['weighted_average']:.2f}")
+              f"${result['trimmed_mean']:.2f}")
 
 
 def example_authentication_methods():

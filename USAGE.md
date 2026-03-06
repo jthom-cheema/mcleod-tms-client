@@ -198,12 +198,12 @@ from tms_client import TMSClient
 from datetime import datetime, timedelta
 
 with TMSClient() as client:
-    # Calculate weighted average revenue for a lane over the last 90 days
+    # Calculate trimmed mean revenue for a lane over the last 90 days
     end = datetime.now()
     start = end - timedelta(days=90)
     result = client.get_lane_average_revenue("983", "850", start, end)
 
-    print(f"Weighted Average: ${result['weighted_average']:.2f}")
+    print(f"Trimmed Mean:     ${result['trimmed_mean']:.2f}")
     print(f"Simple Average:   ${result['simple_average']:.2f}")
     print(f"Load Count:       {result['load_count']} (of {result['total_orders']} in range)")
     print(f"Sampled:          {result['sampled']}")
@@ -226,7 +226,7 @@ with TMSClient() as client:
 - A **lane** is defined by the first 3 digits of origin and destination zip codes
 - Searches delivered orders matching `shipper.zip_code` and `consignee.zip_code` with server-side date filtering on `consignee.sched_arrive_early`
 - **Revenue per load** = `freight_charge` + qualifying accessorial charges (AIF, BTF, FSC, FUEL, CFS, FSF, FSP, HAZ, SO, STOP, SFC, TM)
-- **Weighted average** = `sum(revenue²) / sum(revenue)` — higher-revenue loads count more
+- **10% trimmed mean** — discards the lowest and highest 10% of load revenues before averaging, reducing outlier influence
 - Loads with a `$0 BTF` charge are excluded (charge not yet populated post-delivery)
 - Samples up to 60 orders evenly across the date range by default (`max_sample=60`)
 - Fetches full order details using 10 concurrent threads (~5s typical)
@@ -234,7 +234,7 @@ with TMSClient() as client:
 **Returned Fields**:
 | Field | Description |
 |-------|-------------|
-| `weighted_average` | Weighted average revenue per load |
+| `trimmed_mean` | 10% trimmed mean revenue per load |
 | `simple_average` | Simple average for reference |
 | `load_count` | Number of loads in calculation |
 | `total_orders` | Total orders found in date range |

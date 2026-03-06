@@ -4180,21 +4180,18 @@ class TMSClient:
         company_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Calculate the weighted average revenue on a lane over a date range.
+        Calculate the trimmed mean revenue on a lane over a date range.
 
         A lane is defined by the first three digits of the origin and
         destination zip codes. The method searches for delivered orders
         matching those zip prefixes, filters by the consignee stop's
-        ``sched_arrive_early`` date, and computes a weighted average of
-        the per-load revenue.
+        ``sched_arrive_early`` date, and computes a 10% trimmed mean of
+        the per-load revenue (discards the lowest and highest 10% of
+        values before averaging).
 
         Revenue per load = ``freight_charge`` + sum of qualifying
         accessorial charges (AIF, BTF, FSC, FUEL, CFS, FSF, FSP, HAZ,
         SO, STOP, SFC, TM). Other charge codes are ignored.
-
-        The average is weighted by each load's calculated revenue so that
-        higher-revenue loads contribute proportionally more:
-        ``weighted_avg = sum(revenue_i²) / sum(revenue_i)``
 
         Args:
             origin_zip3: First three digits of the origin (shipper) zip
@@ -4212,7 +4209,7 @@ class TMSClient:
 
         Returns:
             Dict with:
-                - weighted_average: Weighted average revenue (float)
+                - trimmed_mean: 10% trimmed mean revenue (float)
                 - simple_average: Simple (unweighted) average for reference
                 - load_count: Number of sampled loads used in calculation
                 - total_orders: Total delivered orders found on the lane
@@ -4235,7 +4232,7 @@ class TMSClient:
         Examples:
             >>> result = client.get_lane_average_revenue("303", "770",
             ...     "20250101", "20251231")
-            >>> print(f"Weighted avg: ${result['weighted_average']:.2f}")
+            >>> print(f"Trimmed mean: ${result['trimmed_mean']:.2f}")
             >>> print(f"Based on {result['load_count']} loads")
 
             >>> from datetime import datetime
@@ -4455,15 +4452,22 @@ class TMSClient:
         # Sort by delivery date for consistent output
         loads.sort(key=lambda x: x["delivery_date"])
 
-        # --- Step 4: Calculate weighted average ------------------------------
+        # --- Step 4: Calculate 10% trimmed mean --------------------------------
         revenues = [ld["revenue"] for ld in loads]
         total_revenue = sum(revenues)
-        sum_revenue_sq = sum(r * r for r in revenues)
-        weighted_avg = sum_revenue_sq / total_revenue
         simple_avg = total_revenue / len(revenues)
 
+        sorted_revs = sorted(revenues)
+        n = len(sorted_revs)
+        trim_count = math.floor(n * 0.10)
+        if trim_count > 0 and n - 2 * trim_count > 0:
+            trimmed = sorted_revs[trim_count: n - trim_count]
+        else:
+            trimmed = sorted_revs
+        trimmed_mean = sum(trimmed) / len(trimmed)
+
         return {
-            "weighted_average": round(weighted_avg, 2),
+            "trimmed_mean": round(trimmed_mean, 2),
             "simple_average": round(simple_avg, 2),
             "load_count": len(loads),
             "total_orders": total_in_range,
