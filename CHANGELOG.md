@@ -82,7 +82,7 @@ with TMSClient() as client:
 
     # Per-load detail
     for load in result['loads']:
-        print(f"  Order {load['order_id']}: ${load['revenue']:.2f} "
+        print(f"  Order {load['order_id']} ({load['customer_id']}): ${load['revenue']:.2f} "
               f"(freight=${load['freight_charge']:.2f} + acc=${load['accessorial_total']:.2f})")
 ```
 
@@ -101,7 +101,7 @@ with TMSClient() as client:
 | `start_date` | Start date (YYYYMMDD) |
 | `end_date` | End date (YYYYMMDD) |
 | `sampled` | Whether results are from a sample (bool) |
-| `loads` | List of per-load dicts with `order_id`, `freight_charge`, `accessorial_total`, `revenue`, `delivery_date`, `origin_zip`, `dest_zip` |
+| `loads` | List of per-load dicts with `order_id`, `customer_id`, `freight_charge`, `accessorial_total`, `revenue`, `delivery_date`, `origin_zip`, `dest_zip` |
 
 ### Key Implementation Notes
 - Lane = first 3 digits of origin zip -> first 3 digits of destination zip

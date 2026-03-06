@@ -1972,7 +1972,8 @@ def example_lane_average_revenue():
         # --- Per-load breakdown ---
         print("\n=== Per-Load Detail (first 5) ===")
         for load in result['loads'][:5]:
-            print(f"  Order {load['order_id']}: ${load['revenue']:.2f} "
+            print(f"  Order {load['order_id']} ({load['customer_id']}): "
+                  f"${load['revenue']:.2f} "
                   f"(freight=${load['freight_charge']:.2f} "
                   f"+ acc=${load['accessorial_total']:.2f}) "
                   f"del: {load['delivery_date']} "

@@ -217,7 +217,7 @@ with TMSClient() as client:
 
     # Per-load breakdown
     for load in result['loads'][:5]:
-        print(f"  Order {load['order_id']}: ${load['revenue']:.2f} "
+        print(f"  Order {load['order_id']} ({load['customer_id']}): ${load['revenue']:.2f} "
               f"(freight=${load['freight_charge']:.2f} + acc=${load['accessorial_total']:.2f}) "
               f"del: {load['delivery_date']}")
 ```

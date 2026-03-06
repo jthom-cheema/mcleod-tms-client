@@ -3090,14 +3090,21 @@ class TMSClient:
     def get_settlement_comments(self, settlement_id: Union[str, int], company_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Convenience method to get comments for a settlement.
-        
+
+        .. note:: **Unpaid settlements only.** This method (and the underlying
+           ``GET /comments/M/{id}`` endpoint) only works for active/unpaid
+           settlements.  Comments on *paid* settlements (``drs_settle_hist``)
+           are not accessible through the McLeod REST API — the LoadMaster
+           desktop client uses a direct database path that the web-services
+           layer does not expose.
+
         Args:
-            settlement_id: The settlement ID
+            settlement_id: The settlement ID (from the active ``settlement`` table)
             company_id: Optional override for Company ID header
-        
+
         Returns:
             List of RowComments objects for the specified settlement
-        
+
         Examples:
             >>> settlement_comments = client.get_settlement_comments("zz1ivr5ucal12v8CFAATS3", company_id="TMS2")
         """
@@ -3191,16 +3198,24 @@ class TMSClient:
                                   comments: str, company_id: Optional[str] = None) -> Dict[str, Any]:
         """
         Convenience method to create a comment for a settlement.
-        
+
+        .. note:: **Unpaid settlements only.** Comments created through the
+           McLeod REST API are only visible on active/unpaid settlements in
+           the LoadMaster desktop client.  There is no known REST API mechanism
+           to create comments that appear on *paid* settlements
+           (``drs_settle_hist``).  The Paid Settlements Comments tab in
+           LoadMaster reads from a direct database path not exposed by the
+           web-services layer.
+
         Args:
-            settlement_id: The settlement ID
+            settlement_id: The settlement ID (from the active ``settlement`` table)
             comment_type_id: The comment type ID (e.g., "AP", "GEN")
             comments: The comment text to create
             company_id: Optional override for Company ID header
-        
+
         Returns:
             The created RowComments object
-        
+
         Examples:
             >>> comment = client.create_settlement_comment(
             ...     "zz1ivr5ucal12v8CFAATS3",
@@ -4210,8 +4225,8 @@ class TMSClient:
                 - end_date: End date used (YYYYMMDD)
                 - sampled: Whether results are from a sample (bool)
                 - loads: List of per-load detail dicts (order_id,
-                  freight_charge, accessorial_total, revenue,
-                  delivery_date, origin_zip, dest_zip)
+                  customer_id, freight_charge, accessorial_total,
+                  revenue, delivery_date, origin_zip, dest_zip)
 
         Raises:
             ValueError: If zip prefixes are not exactly 3 digits or if
@@ -4411,6 +4426,7 @@ class TMSClient:
 
             return {
                 "order_id": order_id,
+                "customer_id": order.get("customer_id", ""),
                 "freight_charge": freight,
                 "accessorial_total": round(accessorial_total, 2),
                 "revenue": round(revenue, 2),
