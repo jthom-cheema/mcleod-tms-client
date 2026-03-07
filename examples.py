@@ -1944,6 +1944,17 @@ def example_customer_lane_rates():
         active_lanes = client.get_customer_lane_rates(customers, include_expired=False)
         print(f"Found {len(active_lanes)} active lanes across all customers")
 
+        # Commitment (E-type) rates are automatically resolved to their
+        # actual rate and rate method from the commitment_detail table.
+        # These lanes include a commitment_id field.
+        print("\n=== Commitment Rates ===")
+        commitment_lanes = [l for l in active_lanes if 'commitment_id' in l]
+        print(f"Commitment lanes: {len(commitment_lanes)}")
+        for lane in commitment_lanes[:3]:
+            print(f"  {lane['lane_key'][:50]}")
+            print(f"    Rate: ${lane['rate']} ({lane['rate_type']})")
+            print(f"    Commitment ID: {lane['commitment_id']}")
+
 
 def example_lane_average_revenue():
     """Calculate trimmed mean revenue on a lane over a date range.

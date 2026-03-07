@@ -184,8 +184,9 @@ tms2_lanes = client.get_customer_lane_rates("HOMEATGA", company_id="TMS2")
 | `customers` | List of all customers with rates on this lane |
 | `origin_city`, `origin_state`, `origin_value`, `origin_code` | Origin location |
 | `dest_city`, `dest_state`, `dest_value`, `dest_code` | Destination location |
-| `rate` | Most recent rate amount (float) |
-| `rate_type` | F=Flat, M=Per Mile, etc. |
+| `rate` | Most recent rate amount (float). Commitment rates resolved from `commitment_detail`. |
+| `rate_type` | F=Flat, D=Distance. Commitment (E) rates resolved to their underlying type. |
+| `commitment_id` | Commitment detail ID (only present for commitment/E-type rates) |
 | `effective_date` | When rate became effective (YYYYMMDD) |
 | `expiration_date` | When rate expires/expired (YYYYMMDD or None) |
 | `is_expired` | Boolean - is rate currently expired? |

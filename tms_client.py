@@ -4036,9 +4036,10 @@ class TMSClient:
                 - customer_id: Customer code this rate belongs to
                 - origin_city, origin_state, origin_value, origin_code
                 - dest_city, dest_state, dest_value, dest_code  
-                - rate: Most recent rate amount
-                - rate_type: F=Flat, M=Per Mile, etc.
+                - rate: Most recent rate amount (for commitment rates, the actual rate from commitment_detail)
+                - rate_type: F=Flat, D=Distance (commitment rates are resolved to their underlying type)
                 - rate_id: Reference to rate header
+                - commitment_id: Commitment detail ID (only present for commitment/E-type rates)
                 - effective_date: When rate became effective (YYYYMMDD)
                 - expiration_date: When rate expires/expired (YYYYMMDD or None if open-ended)
                 - is_expired: Boolean indicating if rate is currently expired
@@ -4078,6 +4079,7 @@ class TMSClient:
         
         # Step 2: Get all lane details for each rate header
         all_lanes = []
+        commitment_cache: Dict[str, Dict[str, Any]] = {}
         for rate_id, header_info in header_map.items():
             lanes = self.search_table_rows(
                 'orig_dest_rate',
@@ -4086,7 +4088,55 @@ class TMSClient:
             )
             for lane in lanes:
                 lane['_header'] = header_info
-            all_lanes.extend(lanes)
+
+                # Resolve commitment (E-type) rates to their underlying rate
+                if lane.get('rate_type') == 'E':
+                    odr_id = lane.get('id', '')
+                    if odr_id and odr_id not in commitment_cache:
+                        cd_results = self.search_table_rows(
+                            'commitment_detail',
+                            filters={'orig_dest_rate_id': odr_id},
+                            company_id=company_id,
+                        )
+                        # When multiple commitment_details exist they are
+                        # date-sequenced (expiration_date / start_date).
+                        # Pick the one whose date range covers today, falling
+                        # back to the most recent by start_date.
+                        if len(cd_results) > 1:
+                            best = None
+                            for cd_row in cd_results:
+                                sd = (cd_row.get('start_date') or '')[:8]
+                                ed = (cd_row.get('expiration_date') or '')[:8]
+                                if sd <= today and (not ed or ed >= today):
+                                    best = cd_row
+                                    break
+                            if best is None:
+                                cd_results.sort(
+                                    key=lambda r: (r.get('start_date') or '')[:8],
+                                    reverse=True,
+                                )
+                                best = cd_results[0]
+                            commitment_cache[odr_id] = best
+                        else:
+                            commitment_cache[odr_id] = cd_results[0] if cd_results else {}
+                    cd = commitment_cache.get(odr_id, {})
+                    if cd:
+                        lane['_commitment'] = {
+                            'commitment_id': cd.get('id'),
+                            'rate': cd.get('rate'),
+                            'rate_type': cd.get('rate_type'),
+                            'frequency': cd.get('frequency'),
+                            'award_volume': cd.get('award_volume'),
+                            'start_date': cd.get('start_date'),
+                        }
+                    else:
+                        # E-type lane with no commitment_detail has no
+                        # usable rate — exclude it so the consolidation
+                        # logic can fall back to another entry for this
+                        # lane (e.g. a D/F rate on an older header).
+                        continue
+
+                all_lanes.append(lane)
         
         # Step 3: Consolidate lanes - group by lane key, keep most recent
         lane_groups: Dict[str, List[Dict[str, Any]]] = {}
@@ -4125,17 +4175,24 @@ class TMSClient:
             if not include_expired and is_expired:
                 continue
             
-            # Parse rate value
-            rate_val = latest.get('rate', '0')
+            # For commitment (E-type) rates, use the rate from commitment_detail
+            commitment = latest.get('_commitment')
+            if commitment:
+                rate_val = commitment.get('rate', '0')
+                resolved_rate_type = commitment.get('rate_type')
+            else:
+                rate_val = latest.get('rate', '0')
+                resolved_rate_type = latest.get('rate_type')
+
             try:
                 rate_float = float(str(rate_val).replace(',', ''))
             except (ValueError, TypeError):
                 rate_float = 0.0
-            
+
             # Collect all customers that have rates on this lane
             customers_on_lane = list(set(e['_header']['customer_id'] for e in entries))
-            
-            results.append({
+
+            result_entry: Dict[str, Any] = {
                 'lane_key': lane_key,
                 'customer_id': header['customer_id'],
                 'origin_city': latest.get('orig_city_name'),
@@ -4147,7 +4204,7 @@ class TMSClient:
                 'dest_value': latest.get('dest_value'),
                 'dest_code': latest.get('dest_code'),
                 'rate': rate_float,
-                'rate_type': latest.get('rate_type'),
+                'rate_type': resolved_rate_type,
                 'rate_id': latest.get('rate_id'),
                 'effective_date': header['effective_date'],
                 'expiration_date': header['expiration_date'],
@@ -4157,7 +4214,10 @@ class TMSClient:
                 'description': latest.get('descr'),
                 'rate_count': len(entries),
                 'customers': customers_on_lane,
-            })
+            }
+            if commitment:
+                result_entry['commitment_id'] = commitment.get('commitment_id')
+            results.append(result_entry)
         
         # Sort by lane key for consistent output
         results.sort(key=lambda x: x['lane_key'])

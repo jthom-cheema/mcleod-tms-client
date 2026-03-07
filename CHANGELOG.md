@@ -4,6 +4,24 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 
 ---
 
+## [2026-03-06] Resolve Commitment (E-Type) Rates in get_customer_lane_rates()
+
+### Changed
+- **`get_customer_lane_rates()`** now resolves commitment (E-type) rates to their actual freight rate and rate method by looking up the `commitment_detail` table via `orig_dest_rate_id`
+- E-type lanes now return the real contract rate (e.g., $1,900.00 Flat) instead of the commitment ID
+- `rate_type` for E-type lanes is resolved to the underlying type (F=Flat or D=Distance)
+- New `commitment_id` field included in results for commitment-type lanes
+- When multiple `commitment_detail` records exist for one lane (date-sequenced), the currently effective one is selected based on `start_date` / `expiration_date`
+- E-type lanes with no `commitment_detail` record are excluded from results, allowing any older D/F rate for the same lane to surface instead
+
+### How Commitment Rates Work
+- `orig_dest_rate` records with `rate_type='E'` store a commitment ID in the `rate` field, not a dollar amount
+- The actual freight rate lives in the `commitment_detail` table, linked by `orig_dest_rate_id`
+- Each `commitment_detail` record contains: `rate` (actual amount), `rate_type` (F/D), `frequency`, `award_volume`, `start_date`, and optionally `expiration_date`
+- `rate_type='E'` never appears in output — it is always resolved to the underlying F or D type
+
+---
+
 ## [2026-02-16] Receivables History Search
 
 ### Added
@@ -160,9 +178,10 @@ with TMSClient() as client:
 | `customers` | List of all customers with rates on this lane |
 | `origin_city`, `origin_state`, `origin_value`, `origin_code` | Origin location details |
 | `dest_city`, `dest_state`, `dest_value`, `dest_code` | Destination location details |
-| `rate` | Most recent rate amount (float) |
-| `rate_type` | F=Flat, M=Per Mile, etc. |
+| `rate` | Most recent rate amount (float). Commitment rates resolved from `commitment_detail`. |
+| `rate_type` | F=Flat, D=Distance. Commitment (E) rates resolved to their underlying type. |
 | `rate_id` | Reference to rate header |
+| `commitment_id` | Commitment detail ID (only present for commitment/E-type rates) |
 | `effective_date` | When rate became effective (YYYYMMDD) |
 | `expiration_date` | When rate expires/expired (YYYYMMDD or None) |
 | `is_expired` | Boolean - is the rate currently expired? |
