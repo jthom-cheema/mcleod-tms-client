@@ -13,6 +13,9 @@ Update history for the McLeod TMS Client. Each entry includes what was added, wh
 - New `commitment_id` field included in results for commitment-type lanes
 - When multiple `commitment_detail` records exist for one lane (date-sequenced), the currently effective one is selected based on `start_date` / `expiration_date`
 - E-type lanes with no `commitment_detail` record are excluded from results, allowing any older D/F rate for the same lane to surface instead
+- **Commitment lanes now use dates from `commitment_detail`** (`start_date` / `expiration_date`) instead of the rate header dates, since 56% of commitment details have different lifecycles than their parent header
+- The `is_expired` flag and `include_expired` filter are now evaluated *after* commitment resolution, so an active commitment on an expired header is not prematurely filtered out
+- When a commitment detail has no expiration date, the rate header's expiration is used as fallback
 
 ### How Commitment Rates Work
 - `orig_dest_rate` records with `rate_type='E'` store a commitment ID in the `rate` field, not a dollar amount

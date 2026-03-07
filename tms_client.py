@@ -4121,13 +4121,16 @@ class TMSClient:
                             commitment_cache[odr_id] = cd_results[0] if cd_results else {}
                     cd = commitment_cache.get(odr_id, {})
                     if cd:
+                        cd_start = (cd.get('start_date') or '')[:8] or None
+                        cd_exp = (cd.get('expiration_date') or '')[:8] or None
                         lane['_commitment'] = {
                             'commitment_id': cd.get('id'),
                             'rate': cd.get('rate'),
                             'rate_type': cd.get('rate_type'),
                             'frequency': cd.get('frequency'),
                             'award_volume': cd.get('award_volume'),
-                            'start_date': cd.get('start_date'),
+                            'start_date': cd_start,
+                            'expiration_date': cd_exp,
                         }
                     else:
                         # E-type lane with no commitment_detail has no
@@ -4168,21 +4171,26 @@ class TMSClient:
             # Take the most recent
             latest = sorted_entries[0]
             header = latest['_header']
-            
-            is_expired = header['is_expired']
-            
-            # Skip expired if not requested
-            if not include_expired and is_expired:
-                continue
-            
-            # For commitment (E-type) rates, use the rate from commitment_detail
+
+            # For commitment (E-type) rates, use rate, rate_type, and dates
+            # from commitment_detail instead of the rate header.
             commitment = latest.get('_commitment')
             if commitment:
                 rate_val = commitment.get('rate', '0')
                 resolved_rate_type = commitment.get('rate_type')
+                eff_date = commitment.get('start_date') or header['effective_date']
+                exp_date = commitment.get('expiration_date') or header['expiration_date']
+                is_expired = exp_date is not None and exp_date < today if exp_date else False
             else:
                 rate_val = latest.get('rate', '0')
                 resolved_rate_type = latest.get('rate_type')
+                eff_date = header['effective_date']
+                exp_date = header['expiration_date']
+                is_expired = header['is_expired']
+
+            # Skip expired if not requested
+            if not include_expired and is_expired:
+                continue
 
             try:
                 rate_float = float(str(rate_val).replace(',', ''))
@@ -4206,8 +4214,8 @@ class TMSClient:
                 'rate': rate_float,
                 'rate_type': resolved_rate_type,
                 'rate_id': latest.get('rate_id'),
-                'effective_date': header['effective_date'],
-                'expiration_date': header['expiration_date'],
+                'effective_date': eff_date,
+                'expiration_date': exp_date,
                 'is_expired': is_expired,
                 'bill_distance': latest.get('bill_distance'),
                 'times_used': latest.get('times_used', 0),
